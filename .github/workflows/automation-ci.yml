@@ -22,5 +22,5 @@ jobs:
       - name: Verify CLI entrypoint
         run: |
           python3 src/capture_automation/process_captures.py --help | head -n 5
-          python3 src/capture_automation/process_captures.py data/captures/raw --out .capture-automation --dry-run --json-report --max-files 1 > /tmp/cli-smoke.json
+          python3 src/capture_automation/process_captures.py /tmp --out /tmp/.capture-automation --dry-run --json-report --max-files 1 > /tmp/cli-smoke.json
           test -s /tmp/cli-smoke.json
