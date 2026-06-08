@@ -8,7 +8,7 @@ Single-repo curation for presentation/maintainability.
 
 - Repository purpose: **Product/tooling** for screen capture ingestion and enrichment.
 - Audience: portfolio, automation ops, reproducible maintenance workflows.
-- Current health: **Professional-grade structure implemented**.
+- Current health: **Professional-grade structure implemented** with GitHub curation applied.
 
 ## Strengths
 
@@ -17,14 +17,17 @@ Single-repo curation for presentation/maintainability.
 3. README reflects architecture, quick start, and command surface.
 4. Community documentation and safety scaffolding present in `.github/`.
 5. Generated/ephemeral artifacts are isolated in `.capture-automation/`.
+6. GitHub repo metadata and branch protection policies are established:
+   - merge policy, topics, visibility, protections, and remote/branch alignment are in place.
 
 ## Gaps and next actions
 
-1. GitHub repository metadata not in-repo-editable:
-   - Topics, visibility, and pins should be set on GitHub.
-2. Add `PULL_REQUEST_TEMPLATE.md` with checklists (already added).
-3. Add release discipline if external users depend on versioning.
-4. Add tests (unit/integration) for wrapper argument resolution.
+1. Reintroduce strict required status-check enforcement on `main` once Actions execution is healthy again.
+   - Current block: GitHub Actions startup currently fails with billing/payment-limit errors, so required checks would deadlock merges.
+   - Command to re-enable later:
+     `gh api --method PUT /repos/4444J99/screen-capture--060826/branches/main/protection --input /tmp/main-protection.json`
+2. Add release discipline if external users depend on versioning.
+3. Add tests (unit/integration) for wrapper argument resolution.
 
 ## Visibility and positioning
 
@@ -37,3 +40,10 @@ Single-repo curation for presentation/maintainability.
   - `media-processing`
   - `capture-workflow`
   - `pipeline`
+
+## Verification snapshots
+
+- Local HEAD: `66754bc` (merged via PR `#1`) on `main`.
+- Remote URL: `https://github.com/4444J99/screen-capture--060826`
+- Branch protection baseline: admin enforcement, linear history, conversation resolution, and PR review count of `0`.
+- Merge method: squash only.
