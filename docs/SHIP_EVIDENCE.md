@@ -27,12 +27,19 @@ A clean-room copy without `.git`, runtime outputs, caches, or local generated st
 
 ## Remote CI status
 
-Pushed head: `0c7b30a2945e3cb0f4d220cdf347b764f8ffb31b`.
+Current pushed head and latest run IDs should be read live:
 
-Remote workflow runs observed for this head:
+```bash
+git rev-parse HEAD
+gh run list --branch chore/capture-source-race-hardening --limit 5
+```
+
+Representative remote workflow runs observed while verifying this lane:
 
 - `27153338041` (`push`) failed before checkout.
 - `27153340311` (`pull_request`) failed before checkout.
+- `27153488920` (`push`) failed before checkout.
+- `27153491216` (`pull_request`) failed before checkout.
 
 Earlier workflow run `27153235906` was triggered with `workflow_dispatch` for commit `90a66921e3a5d5e6c33cabd098693bcacaaaf54e` and failed for the same reason.
 
