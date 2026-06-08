@@ -30,7 +30,7 @@ from .config import (
 def telemetry_report_path(options: RunOptions) -> Path:
     mode = options.mode.replace("_", "-")
     safe_mode = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "-" for ch in mode)
-    run_id = options.run_id or f"api-{int(time.time())}"
+    run_id = options.run_id or f"api-{int(time.time())}-{uuid.uuid4().hex[:8]}"
     return options.normalized_out() / "reports" / f"platform-{safe_mode}-{run_id}.json"
 
 
@@ -93,12 +93,25 @@ def _coerce_bool(value: Any) -> bool:
 
 
 def parse_options(payload: Dict[str, Any]) -> RunOptions:
-    source = normalize_platform_path(payload.get("source"), default=default_source_dir(), field="source")
-    out = normalize_platform_path(payload.get("out"), default=default_out_dir(), field="out")
+    source = normalize_platform_path(
+        payload.get("source"), default=default_source_dir(), field="source"
+    )
+    out = normalize_platform_path(
+        payload.get("out"), default=default_out_dir(), field="out"
+    )
     mode = validate_choice(
         str(payload.get("mode", "process")),
         field="mode",
-        allowed={"check-source", "check_source", "process", "query", "repair", "run", "once", "verify"},
+        allowed={
+            "check-source",
+            "check_source",
+            "process",
+            "query",
+            "repair",
+            "run",
+            "once",
+            "verify",
+        },
     )
 
     return RunOptions(
@@ -106,7 +119,9 @@ def parse_options(payload: Dict[str, Any]) -> RunOptions:
         out=out,
         mode=mode,
         copy=_coerce_bool(payload.get("copy")),
-        media_types=validate_media_types(str(payload.get("media_types", payload.get("mediaTypes", "all")))),
+        media_types=validate_media_types(
+            str(payload.get("media_types", payload.get("mediaTypes", "all")))
+        ),
         min_size_bytes=coerce_int(
             payload.get("min_size_bytes", payload.get("minSizeBytes", 0)),
             field="min_size_bytes",
@@ -147,7 +162,9 @@ def parse_options(payload: Dict[str, Any]) -> RunOptions:
             maximum=1000,
         ),
         no_ocr=_coerce_bool(payload.get("no_ocr", payload.get("noOcr", False))),
-        no_thumbnails=_coerce_bool(payload.get("no_thumbnails", payload.get("noThumbnails", False))),
+        no_thumbnails=_coerce_bool(
+            payload.get("no_thumbnails", payload.get("noThumbnails", False))
+        ),
         run_id=validate_run_id(payload.get("run_id", payload.get("runId", ""))),
         timeout_sec=coerce_int(
             payload.get("timeout", payload.get("timeoutSec", 120)),
@@ -220,7 +237,7 @@ def run_capture_action(payload: Dict[str, Any]) -> ActionResult:
     out = str(payload.get("out", ""))
     try:
         options = parse_options(payload)
-        run_id = options.run_id or f"run-{int(time.time())}"
+        run_id = options.run_id or f"run-{int(time.time())}-{uuid.uuid4().hex[:8]}"
         options.run_id = run_id
         command = build_command_for_mode(options)
         mode = options.mode
