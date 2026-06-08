@@ -867,11 +867,19 @@ def process_file(
     run_stats: Dict[str, int],
 ) -> Optional[CaptureRecord]:
     path = resolve_media_path(path)
+    try:
+        source_stat = path.stat()
+    except OSError as exc:
+        raise FileNotFoundError(f"source_missing:{path}") from exc
+
     ext = path.suffix.lower()
     media_type = media_type_for_ext(ext)
-    file_hash = sha256_for_file(path)
+    try:
+        file_hash = sha256_for_file(path)
+    except OSError as exc:
+        raise FileNotFoundError(f"source_missing:{path}") from exc
     existing = processed_hashes.get(file_hash)
-    size_bytes = path.stat().st_size
+    size_bytes = source_stat.st_size
     source_state = manifest.setdefault("source_index", {})
 
     captured_at = parse_capture_time(path)
@@ -901,7 +909,7 @@ def process_file(
     if existing is not None:
         source_entry = {
             "size_bytes": size_bytes,
-            "mtime_ns": path.stat().st_mtime_ns,
+            "mtime_ns": source_stat.st_mtime_ns,
             "status": "duplicate",
             "sha256": file_hash,
             "canonical_path": existing,
@@ -1043,7 +1051,7 @@ def process_file(
             "run_id": run_id,
             "source_state": {
                 "size_bytes": size_bytes,
-                "mtime_ns": path.stat().st_mtime_ns,
+                "mtime_ns": source_stat.st_mtime_ns,
                 "status": "processed",
                 "sha256": file_hash,
                 "canonical_path": str(canonical_path),
@@ -1064,7 +1072,7 @@ def process_file(
         }
         source_state[str(path)] = {
             "size_bytes": size_bytes,
-            "mtime_ns": path.stat().st_mtime_ns,
+            "mtime_ns": source_stat.st_mtime_ns,
             "status": "processed",
             "sha256": file_hash,
             "canonical_path": str(canonical_path),
@@ -2273,10 +2281,12 @@ def run_once(
     processed_hashes = build_hash_index(manifest)
     records: List[CaptureRecord] = []
     for path in candidate_files:
-        resolved_path = resolve_media_path(path)
-        if not resolved_path.exists():
+        try:
+            resolved_path = resolve_media_path(path)
+            resolved_path.stat()
+        except OSError:
             logging.warning("Skipping vanished source file: %s", path)
-            run_stats["failed"] += 1
+            run_stats["skipped"] += 1
             errors = manifest.setdefault("errors", [])
             if isinstance(errors, list):
                 errors.append({
@@ -2320,6 +2330,16 @@ def run_once(
                     run_stats["duplicates"] += 1
                 elif record.status == "processed":
                     run_stats["new"] += 1
+        except FileNotFoundError:
+            logging.warning("Skipping vanished source file during processing: %s", path)
+            run_stats["skipped"] += 1
+            if manifest.get("errors") is None or not isinstance(manifest.get("errors"), list):
+                manifest["errors"] = []
+            manifest["errors"].append({
+                "path": str(path),
+                "error": "source_missing",
+                "occurred_at": now_utc_iso(),
+            })
         except Exception as exc:  # pragma: no cover - broad catch to keep pipeline resilient
             logging.exception("Failed processing %s", path)
             bump_stat(manifest, "errors")

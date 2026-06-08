@@ -33,6 +33,13 @@
   - `reports/`
   - `pipeline-events.jsonl`
 
+## 3a) Source behavior (important)
+
+- Default processor behavior is **move mode**. Processed source files are removed from `data/captures/raw/` unless `--copy` is enabled.
+- If you need source files retained for replay, dedupe recovery, or audit, run in copy mode:
+  - `CAPTURE_PIPELINE_COPY=1 ./tools/capture-automation/capture_automation_pipeline.sh data/captures/raw .capture-automation`
+  - or add `--copy` to `process_captures.py` / `run_capture_automation.sh`.
+
 ## 4) Run commands
 
 ```bash
