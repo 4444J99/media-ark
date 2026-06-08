@@ -88,3 +88,37 @@ latest run IDs.
 ## Release decision
 
 Do not mark the finishline complete until a GitHub Actions run executes `npm run release:verify` on the pushed commit and passes.
+
+## Post-merge runner-pickup hardening (2026-06-08, branch `ci/runner-pickup-recovery`)
+
+PR #3 was merged as squash commit `0bbf37c`. The post-merge push
+triggered a `CLI smoke` run (`27161881679`) on `main` which failed
+the same way as the 19 prior runs on the PR branch: runner
+assigned, no pickup heartbeat, `runner_id: 0`, zero steps, ~3 s.
+
+**Falsification:** an attempted fix on branch
+`ci/runner-pickup-recovery` swapped `runs-on: ubuntu-latest` →
+`runs-on: ubuntu-22.04` (a different image label, different runner
+pool). Two new runs (`27163015265`, `27163023887`) on
+`ubuntu-22.04` failed the same way. The image-label theory is
+falsified; the runner-pickup failure is not specific to
+`ubuntu-latest`. Branch `ci/runner-pickup-recovery` was reset and
+contains only a comment block at the top of
+`.github/workflows/automation-ci.yml` documenting the diagnosis
+and the next-step options; the workflow behavior is unchanged
+from `main`.
+
+**Total failing runs on this repo today: 22 / 22**, across 2 image
+labels (`ubuntu-latest`, `ubuntu-22.04`), 3 event types
+(`push`, `pull_request`, `workflow_dispatch`), 3 branch tips
+(`main`, `chore/capture-source-race-hardening`,
+`ci/runner-pickup-recovery`), and 4+ distinct GitHub-hosted runner
+IDs in the 1000024022–1000024075 range.
+
+**No in-workflow change resolves the issue** as of 2026-06-08
+19:55 UTC. The local release verifier remains the ground truth
+and is green on the merge commit. See
+`MERGE_PATH.md` and the inline comment block in
+`.github/workflows/automation-ci.yml` for the full diagnostic trail
+and the next-step options (self-hosted runner registration, repo
+split, or wait for the GitHub-side transient to clear).

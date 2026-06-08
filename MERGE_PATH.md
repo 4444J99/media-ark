@@ -160,3 +160,48 @@ repos in the account.
 - `~/.Codex/plans/closeout-2026-06-08-review-screen-capture-platform.md`
   — session closeout superseding the prior
   `closeout-2026-06-08-screen-capture-platform.md`.
+
+## Post-merge runner-pickup hardening (2026-06-08, 19:55 UTC)
+
+The PR #3 squash merge (commit `0bbf37c`) carried this file as-is
+in its pre-merge form. After the merge, two further investigations
+were run on branch `ci/runner-pickup-recovery`:
+
+1. **Falsification of image-label theory.** The workflow file
+   was modified to use `runs-on: ubuntu-22.04` (the LTS-pinned
+   image, a different runner pool from `ubuntu-latest`). Two
+   test runs (`27163015265` and `27163023887`) on
+   `ci/runner-pickup-recovery` both failed the same way: the
+   runner was assigned (`GitHub Actions 1000024032`-ish range),
+   no pickup heartbeat, 3-second death, `runner_id: 0`,
+   zero steps. The image label is not the variable. The
+   workflow file was reverted to `ubuntu-latest`.
+
+2. **Self-hosted runner not available.** `actions/runners` on
+   this repo is empty; user-level runner-group endpoints return
+   404 (the user-level API was deprecated for orgs only).
+   The same account's other repos (`limen`, `a-i--skills`,
+   `portfolio`) all use GitHub-hosted runners and run
+   successfully. There is no self-hosted runner pool to bind
+   to, so the "register a self-hosted runner" remediation
+   cannot be applied without out-of-band setup.
+
+3. **Final state on the branch.** Branch
+   `ci/runner-pickup-recovery` was reset to `main` and now
+   contains a single atomic commit that:
+   - adds a long comment block at the top of
+     `.github/workflows/automation-ci.yml` documenting the
+     22-failure evidence, the falsified image-label theory,
+     and the three next-step options
+     (self-hosted-runner / repo-split / wait-for-transient).
+   - appends a post-merge section to `docs/SHIP_EVIDENCE.md`
+     summarizing the same evidence.
+
+   The workflow behavior is **unchanged** from `main`; the
+   branch is a documentation + institutional-memory change
+   only.
+
+4. **Total failing runs on this repo today: 22 / 22.**
+   Image label is not the variable. The runner-pickup issue
+   persists regardless of the workflow content. Local release
+   verifier remains the ground truth.
