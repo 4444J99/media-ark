@@ -35,3 +35,19 @@ python3 src/capture_automation/process_captures.py data/captures/raw --out .capt
 ## 6. Keep it running
 
 Use `capture_watch_service.sh` for periodic watch mode.
+
+## 7) Product surfaces (API + dashboard + MCP)
+
+Run once and open the control UI:
+
+```bash
+npm run platform:start
+```
+
+Open `http://127.0.0.1:8787/` in a browser. The command also preflights MCP because the MCP surface is stdio-based and starts per client session.
+
+Expose tooling interface:
+
+```bash
+python3 -m src.platform.mcp_server
+```

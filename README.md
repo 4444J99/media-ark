@@ -76,14 +76,68 @@ python3 src/capture_automation/process_captures.py data/captures/raw --out .capt
 ./tools/capture-automation/capture_automation_pipeline.sh data/captures/raw .capture-automation
 ```
 
+## Product Surfaces (CLI, API, MCP, Dashboard)
+
+### API + dashboard
+
+Start the platform in one command:
+
+```bash
+npm run platform:start
+```
+
+The command creates the default source/output directories, preflights the stdio MCP tool contract, then starts the API and dashboard at `http://127.0.0.1:8787/`.
+
+Start UI + API directly:
+
+```bash
+python3 -m src.platform.api_server --host 127.0.0.1 --port 8787
+```
+
+- Open `http://127.0.0.1:8787/` for the dashboard.
+- `GET /api/status?source=<path>&out=<path>`
+- `GET /api/manifest?out=<path>`
+- `GET /api/index?out=<path>&limit=<n>&status=<all|processed|duplicate>&media=<all|image|video|document>`
+- `POST /api/run` with JSON `{"action":"process|check-source|verify|repair|query","source":"...","out":"..."}`
+
+### MCP (stdio)
+
+```bash
+python3 -m src.platform.mcp_server
+```
+
+Exposed tools:
+
+- `capture_status`
+- `capture_check`
+- `capture_run`
+- `capture_verify`
+- `capture_query`
+
+### CLI remains the primary automation engine
+
+```bash
+npm run capture:run
+npm run capture:watch
+npm run capture:pipeline
+```
+
+Run verification:
+
+```bash
+npm run release:verify
+```
+
 ## Storage Model
 
 - `data/captures/raw/` — incoming captures.
 - `src/capture_automation/` — core engine.
+- `src/platform/` — API/MCP runtime bridge.
 - `tools/capture-automation/` — operational wrappers.
 - `.capture-automation/` — canonical outputs, manifests, indexes, events.
 - `.config/` — examples and tooling presets.
 - `docs/` — guides and operational references.
+- `web/` — dashboard UI shell.
 
 ## Commands
 
@@ -107,6 +161,8 @@ python3 src/capture_automation/process_captures.py data/captures/raw --out .capt
 - Keep `data/captures/raw/` as the only inbound source.
 - Use `--cleanup-raw` carefully (copy mode recommended).
 - Use `--event-log` and `--report` for run telemetry.
+- API/MCP actions persist telemetry by default to `.capture-automation/platform-events.jsonl` and `.capture-automation/reports/`.
+- Use `CAPTURE_PLATFORM_ALLOWED_ROOTS` to restrict API/MCP `source` and `out` paths in deployed environments.
 
 ## Governance
 
@@ -122,4 +178,8 @@ python3 src/capture_automation/process_captures.py data/captures/raw --out .capt
 - [docs/](docs/README.md)
 - [docs/CAPTURE_PIPELINE.md](docs/CAPTURE_PIPELINE.md)
 - [docs/getting-started.md](docs/getting-started.md)
+- [docs/ONBOARDING.md](docs/ONBOARDING.md)
 - [docs/troubleshooting.md](docs/troubleshooting.md)
+- [docs/RELEASE.md](docs/RELEASE.md)
+- [docs/SHIP_EVIDENCE.md](docs/SHIP_EVIDENCE.md)
+- [docs/ROADMAP.md](docs/ROADMAP.md)

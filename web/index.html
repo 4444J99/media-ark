@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Screen Capture Platform</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>Screen Capture Automation Platform</h1>
+      <p>Run ingest, inspect status, and trigger capture workflows from one place.</p>
+    </header>
+
+    <section class="grid">
+      <article class="card">
+        <h2>Pipeline Controls</h2>
+        <div class="row">
+          <label for="sourcePath">Source</label>
+          <input id="sourcePath" value="data/captures/raw" />
+        </div>
+        <div class="row">
+          <label for="outPath">Out</label>
+          <input id="outPath" value=".capture-automation" />
+        </div>
+        <div class="row">
+          <label><input id="copyMode" type="checkbox" /> Keep source (copy mode)</label>
+          <label><input id="dryRun" type="checkbox" /> Dry run</label>
+        </div>
+        <div class="row">
+          <label for="maxFiles">Max files</label>
+          <input id="maxFiles" type="number" min="0" value="0" />
+        </div>
+        <div class="btn-row">
+          <button data-action="check">Check Source</button>
+          <button data-action="process">Run Process</button>
+          <button data-action="verify">Verify</button>
+          <button data-action="query">Query</button>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>Service Health</h2>
+        <p><strong>Source:</strong> <span id="sourceStatus">-</span></p>
+        <p><strong>Out:</strong> <span id="outStatus">-</span></p>
+        <p><strong>Manifest:</strong> <span id="manifestStatus">-</span></p>
+        <p><strong>Index Rows:</strong> <span id="indexRows">-</span></p>
+      </article>
+    </section>
+
+    <section class="card">
+      <h2>Index Viewer</h2>
+      <p><strong>Query:</strong> <input id="queryText" placeholder='e.g. invoice' /></p>
+      <p><strong>Media:</strong>
+        <select id="queryMedia">
+          <option value="all">All</option>
+          <option value="image">Image</option>
+          <option value="video">Video</option>
+          <option value="document">Document</option>
+        </select>
+      </p>
+      <p><strong>Status:</strong>
+        <select id="queryStatus">
+          <option value="all">All</option>
+          <option value="processed">processed</option>
+          <option value="duplicate">duplicate</option>
+        </select>
+      </p>
+      <p><strong>Limit:</strong> <input id="queryLimit" type="number" min="1" value="25" /> <button data-action="refresh-index">Refresh Index</button></p>
+      <pre id="results" class="results">No results yet.</pre>
+    </section>
+
+    <section class="card">
+      <h2>Last Run</h2>
+      <pre id="lastRun" class="results">No run yet.</pre>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -50,7 +50,8 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROCESS_SCRIPT="${SCRIPT_DIR}/../src/capture_automation/process_captures.py"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+PROCESS_SCRIPT="${REPO_ROOT}/src/capture_automation/process_captures.py"
 if [[ ! -f "$PROCESS_SCRIPT" ]]; then
   echo "Missing processor: $PROCESS_SCRIPT" >&2
   exit 1

@@ -5,6 +5,7 @@
 1. Ensure your files are in `data/captures/raw/` or the source path you pass.
 2. Use `--verbose` and `--check-source` to inspect scan behavior.
 3. Verify extensions are supported: `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.bmp`, `.tiff`, `.heic`, `.avif`, `.mov`, `.mp4`, `.m4v`, `.webm`, `.avi`, `.mkv`, `.mpg`, `.mpeg`, `.pdf`.
+4. If you see "source_missing" logs, confirm you are running in move mode (default). In move mode, files disappear from `raw/` after successful processing and should be treated as completed skips on subsequent scans.
 
 ## Watch mode exits immediately
 

@@ -38,20 +38,61 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import unicodedata
 
-IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tiff", ".heic", ".avif"}
+IMAGE_EXTS = {
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".webp",
+    ".gif",
+    ".bmp",
+    ".tiff",
+    ".heic",
+    ".avif",
+}
 VIDEO_EXTS = {".mov", ".mp4", ".m4v", ".webm", ".avi", ".mkv", ".mpg", ".mpeg"}
 DOCUMENT_EXTS = {".pdf"}
 ALL_EXTS = IMAGE_EXTS | VIDEO_EXTS | DOCUMENT_EXTS
 
 TIMESTAMP_PATTERNS = [
-    re.compile(r"(?P<ymd>\d{4}-\d{2}-\d{2}) at (?P<time>\d{2}[.:]\d{2}[.:]\d{2}) (?P<ampm>AM|PM)", re.IGNORECASE),
+    re.compile(
+        r"(?P<ymd>\d{4}-\d{2}-\d{2}) at (?P<time>\d{2}[.:]\d{2}[.:]\d{2}) (?P<ampm>AM|PM)",
+        re.IGNORECASE,
+    ),
     re.compile(r"(?P<ymd>\d{4}-\d{2}-\d{2}) (?P<time>\d{2}[.:]\d{2}[.:]\d{2})"),
 ]
 
 STOP_WORDS = {
-    "the", "and", "you", "that", "was", "for", "with", "this", "have", "just", "into", "from",
-    "about", "were", "will", "your", "their", "when", "where", "what", "which", "there", "here",
-    "would", "could", "should", "them", "then", "been", "they", "than",
+    "the",
+    "and",
+    "you",
+    "that",
+    "was",
+    "for",
+    "with",
+    "this",
+    "have",
+    "just",
+    "into",
+    "from",
+    "about",
+    "were",
+    "will",
+    "your",
+    "their",
+    "when",
+    "where",
+    "what",
+    "which",
+    "there",
+    "here",
+    "would",
+    "could",
+    "should",
+    "them",
+    "then",
+    "been",
+    "they",
+    "than",
 }
 
 
@@ -64,7 +105,9 @@ def setup_logging(verbose: bool) -> None:
 
 
 def run_cmd(cmd: List[str], *, timeout: int = 30) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout)
+    return subprocess.run(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout
+    )
 
 
 def truncate_text(value: Optional[str], *, max_chars: int = 1600) -> str:
@@ -361,7 +404,9 @@ def run_post_hook(
                 "stderr": truncate_text(result.stderr),
             }
             if result.returncode == 0:
-                logging.debug("Post-hook stdout (%s): %s", command, hook_detail["stdout"])
+                logging.debug(
+                    "Post-hook stdout (%s): %s", command, hook_detail["stdout"]
+                )
                 return True, hook_detail
             logging.warning("Post-hook failed (%s): %s", command, hook_detail["stderr"])
         except subprocess.TimeoutExpired:
@@ -374,7 +419,9 @@ def run_post_hook(
                 "stdout": "",
                 "stderr": f"timeout after {timeout}s",
             }
-            logging.warning("Post-hook timeout (%s): %s", command, hook_detail["stderr"])
+            logging.warning(
+                "Post-hook timeout (%s): %s", command, hook_detail["stderr"]
+            )
         except Exception as exc:
             duration_ms = int((time.time() - start) * 1000)
             hook_detail = {
@@ -389,7 +436,9 @@ def run_post_hook(
 
         if attempt <= max_attempts:
             if retry_delay:
-                logging.debug("Retrying post-hook (%s) after %.1fs", command, retry_delay)
+                logging.debug(
+                    "Retrying post-hook (%s) after %.1fs", command, retry_delay
+                )
                 time.sleep(retry_delay)
             continue
         return False, hook_detail
@@ -482,7 +531,9 @@ def image_metadata(path: Path) -> Dict[str, Any]:
     if not command_exists("sips"):
         return {}
 
-    result = run_cmd(["sips", "-g", "pixelWidth", "-g", "pixelHeight", "-g", "format", str(path)])
+    result = run_cmd(
+        ["sips", "-g", "pixelWidth", "-g", "pixelHeight", "-g", "format", str(path)]
+    )
     if result.returncode != 0:
         return {}
 
@@ -593,7 +644,9 @@ def extract_ocr(path: Path, lang: str = "eng") -> str:
     if not command_exists("tesseract"):
         return ""
 
-    result = run_cmd(["tesseract", str(path), "stdout", "--dpi", "300", "-l", lang], timeout=90)
+    result = run_cmd(
+        ["tesseract", str(path), "stdout", "--dpi", "300", "-l", lang], timeout=90
+    )
     if result.returncode != 0:
         return ""
     return (result.stdout or "").strip()
@@ -609,12 +662,27 @@ def extract_pdf_text(path: Path) -> str:
     return text[:25000]
 
 
-def make_thumbnail_image(path: Path, output_dir: Path, *, max_size: int = 1024) -> Optional[Path]:
+def make_thumbnail_image(
+    path: Path, output_dir: Path, *, max_size: int = 1024
+) -> Optional[Path]:
     if not command_exists("sips"):
         return None
     output_dir.mkdir(parents=True, exist_ok=True)
     target = output_dir / f"{path.stem}.jpg"
-    result = run_cmd(["sips", "-Z", str(max_size), "--setProperty", "format", "jpeg", str(path), "--out", str(target)], timeout=30)
+    result = run_cmd(
+        [
+            "sips",
+            "-Z",
+            str(max_size),
+            "--setProperty",
+            "format",
+            "jpeg",
+            str(path),
+            "--out",
+            str(target),
+        ],
+        timeout=30,
+    )
     if result.returncode != 0:
         return None
     return target
@@ -702,12 +770,19 @@ def write_manifest(
     if manifest_backup_count > 0 and path.exists():
         backup_root = path.parent / ".manifest-backups"
         backup_root.mkdir(parents=True, exist_ok=True)
-        backup_name = f"{path.stem}.{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"
+        backup_name = (
+            f"{path.stem}.{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"
+        )
         backup_path = backup_root / backup_name
         try:
             path.replace(backup_path)
         except OSError:
-            logging.debug("Unable to move manifest backup %s -> %s", path, backup_path, exc_info=True)
+            logging.debug(
+                "Unable to move manifest backup %s -> %s",
+                path,
+                backup_path,
+                exc_info=True,
+            )
 
         backups = sorted(backup_root.glob(f"{path.stem}.*.json"))
         if len(backups) > manifest_backup_count:
@@ -715,7 +790,9 @@ def write_manifest(
                 try:
                     old.unlink()
                 except OSError:
-                    logging.debug("Unable to remove old manifest backup %s", old, exc_info=True)
+                    logging.debug(
+                        "Unable to remove old manifest backup %s", old, exc_info=True
+                    )
 
     tmp = path.with_suffix(".tmp")
     with tmp.open("w", encoding="utf-8") as fp:
@@ -742,7 +819,9 @@ def discover_media_files(
     for dirpath, dirnames, filenames in os.walk(source_root):
         dirpath_obj = Path(dirpath).resolve()
         dirnames[:] = [
-            d for d in dirnames if not is_within_dir((dirpath_obj / d).resolve(), output_root)
+            d
+            for d in dirnames
+            if not is_within_dir((dirpath_obj / d).resolve(), output_root)
         ]
         if is_within_dir(dirpath_obj, output_root):
             continue
@@ -752,7 +831,10 @@ def discover_media_files(
             ext = Path(filename).suffix.lower()
             if ext in ALL_EXTS:
                 media_type = media_type_for_ext(ext)
-                if "all" not in allowed_media_types and media_type not in allowed_media_types:
+                if (
+                    "all" not in allowed_media_types
+                    and media_type not in allowed_media_types
+                ):
                     continue
                 file_path = Path(dirpath) / filename
                 if file_path.is_symlink() and not follow_symlinks:
@@ -766,7 +848,9 @@ def discover_media_files(
                 if max_size_bytes > 0 and size_bytes > max_size_bytes:
                     continue
                 rel = file_path.relative_to(source_root).as_posix()
-                if include_patterns and not any(fnmatch.fnmatch(rel, pattern) for pattern in include_patterns):
+                if include_patterns and not any(
+                    fnmatch.fnmatch(rel, pattern) for pattern in include_patterns
+                ):
                     continue
                 if any(fnmatch.fnmatch(rel, pattern) for pattern in exclude_patterns):
                     continue
@@ -794,7 +878,11 @@ def build_hash_index(manifest: Dict[str, Any]) -> Dict[str, str]:
             if isinstance(meta, dict):
                 canonical = meta.get("canonical_path")
                 if isinstance(canonical, str):
-                    file_hash = meta.get("sha256") if isinstance(meta.get("sha256"), str) else None
+                    file_hash = (
+                        meta.get("sha256")
+                        if isinstance(meta.get("sha256"), str)
+                        else None
+                    )
 
             elif isinstance(meta, str):
                 canonical = meta
@@ -867,11 +955,19 @@ def process_file(
     run_stats: Dict[str, int],
 ) -> Optional[CaptureRecord]:
     path = resolve_media_path(path)
+    try:
+        source_stat = path.stat()
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f"source_missing:{path}") from exc
+
     ext = path.suffix.lower()
     media_type = media_type_for_ext(ext)
-    file_hash = sha256_for_file(path)
+    try:
+        file_hash = sha256_for_file(path)
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f"source_missing:{path}") from exc
     existing = processed_hashes.get(file_hash)
-    size_bytes = path.stat().st_size
+    size_bytes = source_stat.st_size
     source_state = manifest.setdefault("source_index", {})
 
     captured_at = parse_capture_time(path)
@@ -901,7 +997,7 @@ def process_file(
     if existing is not None:
         source_entry = {
             "size_bytes": size_bytes,
-            "mtime_ns": path.stat().st_mtime_ns,
+            "mtime_ns": source_stat.st_mtime_ns,
             "status": "duplicate",
             "sha256": file_hash,
             "canonical_path": existing,
@@ -1043,7 +1139,7 @@ def process_file(
             "run_id": run_id,
             "source_state": {
                 "size_bytes": size_bytes,
-                "mtime_ns": path.stat().st_mtime_ns,
+                "mtime_ns": source_stat.st_mtime_ns,
                 "status": "processed",
                 "sha256": file_hash,
                 "canonical_path": str(canonical_path),
@@ -1064,7 +1160,7 @@ def process_file(
         }
         source_state[str(path)] = {
             "size_bytes": size_bytes,
-            "mtime_ns": path.stat().st_mtime_ns,
+            "mtime_ns": source_stat.st_mtime_ns,
             "status": "processed",
             "sha256": file_hash,
             "canonical_path": str(canonical_path),
@@ -1156,7 +1252,9 @@ def build_index(
         "documents": sum(1 for r in rows if r["media_type"] == "document"),
         "duplicates": sum(1 for r in rows if r["status"] == "duplicate"),
     }
-    (out_root / "index-summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    (out_root / "index-summary.json").write_text(
+        json.dumps(summary, indent=2), encoding="utf-8"
+    )
     return count, pruned
 
 
@@ -1180,8 +1278,140 @@ def write_index_rows(
         "documents": sum(1 for r in rows if r["media_type"] == "document"),
         "duplicates": sum(1 for r in rows if r["status"] == "duplicate"),
     }
-    (out_root / "index-summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    (out_root / "index-summary.json").write_text(
+        json.dumps(summary, indent=2), encoding="utf-8"
+    )
     return len(rows)
+
+
+def iter_sidecar_paths(out_root: Path) -> Iterable[Path]:
+    for sidecar in sorted(out_root.glob("*.json")):
+        if sidecar.name in {"manifest.json", "index-summary.json"}:
+            continue
+        if sidecar.name == "config.json":
+            continue
+        if sidecar.name.endswith(".backup.json"):
+            continue
+        if sidecar.is_file():
+            yield sidecar
+
+
+def record_from_sidecar(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    canonical_path = payload.get("canonical_path")
+    if not isinstance(canonical_path, str) or not canonical_path.strip():
+        return None
+    canonical = Path(canonical_path).expanduser().resolve()
+    if not canonical.exists():
+        return None
+
+    status = str(payload.get("status", "processed")).strip().lower()
+    if status not in {"processed", "duplicate"}:
+        status = "processed"
+
+    media_type = payload.get("media_type")
+    if not isinstance(media_type, str) or media_type not in {
+        "image",
+        "video",
+        "document",
+    }:
+        media_type = media_type_for_ext(canonical.suffix.lower())
+
+    tags = payload.get("tags", [])
+    if not isinstance(tags, list):
+        tags = []
+
+    dimensions = payload.get("dimensions", {})
+    if not isinstance(dimensions, dict):
+        dimensions = {}
+
+    captured_at = str(payload.get("captured_at") or "")
+    created_at = str(
+        payload.get("created_at")
+        or payload.get("processed_at")
+        or payload.get("seen_at")
+        or captured_at
+    )
+
+    size_raw = payload.get("size_bytes")
+    if isinstance(size_raw, bool) or not isinstance(size_raw, int):
+        try:
+            size_bytes = (
+                int(size_raw) if size_raw is not None else canonical.stat().st_size
+            )
+        except (TypeError, ValueError):
+            size_bytes = canonical.stat().st_size
+    else:
+        size_bytes = size_raw or canonical.stat().st_size
+
+    return {
+        "id": str(payload.get("id") or str(payload.get("sha256", ""))[:12]),
+        "source_path": str(payload.get("source_path") or ""),
+        "canonical_path": str(canonical),
+        "media_type": media_type,
+        "sha256": str(payload.get("sha256") or ""),
+        "size_bytes": size_bytes,
+        "captured_at": captured_at,
+        "title": str(
+            payload.get("title")
+            or ("duplicate" if status == "duplicate" else canonical.stem)
+        ),
+        "dimensions": dimensions,
+        "duration": payload.get("duration_seconds", payload.get("duration")),
+        "ocr_text": payload.get("ocr_text", payload.get("ocr")),
+        "tags": tags,
+        "notes": str(payload.get("notes") or ""),
+        "status": status,
+        "created_at": created_at,
+        "thumbnail": payload.get("thumbnail"),
+    }
+
+
+def load_sidecar_records(out_root: Path) -> Tuple[List[Dict[str, Any]], int]:
+    records: List[Dict[str, Any]] = []
+    skipped = 0
+    for sidecar in iter_sidecar_paths(out_root):
+        try:
+            payload = json.loads(sidecar.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            skipped += 1
+            continue
+        if not isinstance(payload, dict):
+            skipped += 1
+            continue
+        try:
+            record = record_from_sidecar(payload)
+        except (TypeError, ValueError):
+            skipped += 1
+            continue
+        if record is None:
+            skipped += 1
+            continue
+        records.append(record)
+    return records, skipped
+
+
+def _record_key(record: Dict[str, Any]) -> Tuple[str, str, str]:
+    return (
+        str(record.get("source_path", "")),
+        str(record.get("canonical_path", "")),
+        str(record.get("status", "")),
+    )
+
+
+def _record_manifest_entry(record: Dict[str, Any], status: str) -> Dict[str, Any]:
+    timestamp_key = "seen_at" if status == "duplicate" else "processed_at"
+    timestamp = str(
+        record.get("created_at") or record.get("captured_at") or now_utc_iso()
+    )
+    return {
+        "canonical_path": str(record.get("canonical_path", "")),
+        "source_path": str(record.get("source_path", "")),
+        "sha256": str(record.get("sha256", "")),
+        "size_bytes": int(record.get("size_bytes") or 0),
+        "status": status,
+        timestamp_key: timestamp,
+        "captured_at": str(record.get("captured_at") or ""),
+    }
 
 
 def run_repair_state(
@@ -1191,6 +1421,7 @@ def run_repair_state(
     prune_orphans: bool = False,
 ) -> Dict[str, int]:
     records = load_index_records(out_root)
+    sidecar_records, skipped_sidecars = load_sidecar_records(out_root)
     kept_records: List[Dict[str, Any]] = []
     pruned_index = 0
     for row in records:
@@ -1202,6 +1433,16 @@ def run_repair_state(
             pruned_index += 1
             continue
         kept_records.append(row)
+
+    existing_keys = {_record_key(row) for row in kept_records}
+    recovered_sidecars = 0
+    for row in sidecar_records:
+        key = _record_key(row)
+        if key in existing_keys:
+            continue
+        kept_records.append(row)
+        existing_keys.add(key)
+        recovered_sidecars += 1
 
     kept_canonical = {
         Path(row["canonical_path"]).resolve().as_posix()
@@ -1223,6 +1464,14 @@ def run_repair_state(
             pruned_processed += 1
             continue
         kept_processed[source_path] = meta
+
+    for row in kept_records:
+        if row.get("status") != "processed":
+            continue
+        source_path = str(row.get("source_path") or "")
+        if not source_path:
+            continue
+        kept_processed.setdefault(source_path, _record_manifest_entry(row, "processed"))
     manifest["processed"] = kept_processed
 
     duplicates = manifest.get("duplicates")
@@ -1242,6 +1491,16 @@ def run_repair_state(
             pruned_duplicates += 1
             continue
         kept_duplicates[source_path] = meta
+
+    for row in kept_records:
+        if row.get("status") != "duplicate":
+            continue
+        source_path = str(row.get("source_path") or "")
+        if not source_path:
+            continue
+        kept_duplicates.setdefault(
+            source_path, _record_manifest_entry(row, "duplicate")
+        )
     manifest["duplicates"] = kept_duplicates
 
     source_index = manifest.get("source_index")
@@ -1261,6 +1520,30 @@ def run_repair_state(
             pruned_source_index += 1
             continue
         kept_source_index[source_path] = meta
+
+    for row in kept_records:
+        source_path = str(row.get("source_path") or "")
+        canonical_path = str(row.get("canonical_path") or "")
+        if not source_path or not canonical_path:
+            continue
+        try:
+            mtime_ns = Path(source_path).stat().st_mtime_ns
+        except OSError:
+            mtime_ns = 0
+        kept_source_index.setdefault(
+            source_path,
+            {
+                "size_bytes": int(row.get("size_bytes") or 0),
+                "mtime_ns": mtime_ns,
+                "status": str(row.get("status") or "processed"),
+                "sha256": str(row.get("sha256") or ""),
+                "canonical_path": canonical_path,
+                "recovered_at": str(
+                    row.get("created_at") or row.get("captured_at") or ""
+                ),
+                "captured_at": str(row.get("captured_at") or ""),
+            },
+        )
     manifest["source_index"] = kept_source_index
 
     hash_index = manifest.get("hash_index")
@@ -1276,15 +1559,25 @@ def run_repair_state(
             kept_hash_index[digest] = canonical_path
         else:
             pruned_hash += 1
+
+    for row in kept_records:
+        digest = str(row.get("sha256") or "")
+        canonical_path = str(row.get("canonical_path") or "")
+        if len(digest) == 64 and canonical_path:
+            kept_hash_index.setdefault(digest, canonical_path)
     manifest["hash_index"] = kept_hash_index
     manifest["repaired_at"] = now_utc_iso()
 
-    prune_summary_orphans = prune_orphan_outputs(
-        out_root,
-        kept_canonical,
-        dry_run=False,
-        remove_thumbnails=True,
-    ) if prune_orphans else {"sidecars": 0, "thumbnails": 0, "empty_dirs": 0}
+    prune_summary_orphans = (
+        prune_orphan_outputs(
+            out_root,
+            kept_canonical,
+            dry_run=False,
+            remove_thumbnails=True,
+        )
+        if prune_orphans
+        else {"sidecars": 0, "thumbnails": 0, "empty_dirs": 0}
+    )
 
     index_rows = write_index_rows(out_root, kept_records)
     return {
@@ -1293,6 +1586,8 @@ def run_repair_state(
         "pruned_duplicates": pruned_duplicates,
         "pruned_source_index": pruned_source_index,
         "pruned_hash_index": pruned_hash,
+        "recovered_sidecars": recovered_sidecars,
+        "skipped_sidecars": skipped_sidecars,
         "pruned_orphan_sidecars": prune_summary_orphans["sidecars"],
         "pruned_orphan_thumbnails": prune_summary_orphans["thumbnails"],
         "pruned_orphan_empty_dirs": prune_summary_orphans["empty_dirs"],
@@ -1461,7 +1756,11 @@ def record_matches_query(
     if status != "all" and record.get("status") != status:
         return False
 
-    captured_at = parse_query_datetime(record.get("captured_at", "")) if record.get("captured_at") else None
+    captured_at = (
+        parse_query_datetime(record.get("captured_at", ""))
+        if record.get("captured_at")
+        else None
+    )
     if since and captured_at and captured_at < since:
         return False
     if until and captured_at and captured_at > until:
@@ -1488,7 +1787,9 @@ def record_matches_query(
 def run_query(out_root: Path, args: argparse.Namespace) -> int:
     records = load_index_records(out_root)
     if not records:
-        logging.info("No index found at %s. Run process mode first.", out_root / "index.jsonl")
+        logging.info(
+            "No index found at %s. Run process mode first.", out_root / "index.jsonl"
+        )
         if args.json_report or args.report:
             emit_report(
                 {
@@ -1580,7 +1881,9 @@ def run_query(out_root: Path, args: argparse.Namespace) -> int:
         for row in matched:
             print(json.dumps(row, ensure_ascii=False))
     else:
-        print(json.dumps({"count": len(matched), "matches": matched}, ensure_ascii=False))
+        print(
+            json.dumps({"count": len(matched), "matches": matched}, ensure_ascii=False)
+        )
 
     logging.info("Query matched %s records", len(matched))
     return len(matched)
@@ -1591,6 +1894,7 @@ def run_health_check(
     manifest: Dict[str, Any],
 ) -> Dict[str, Any]:
     index_records = load_index_records(out_root)
+    sidecar_records, skipped_sidecars = load_sidecar_records(out_root)
     processed = manifest.get("processed", {})
     duplicates = manifest.get("duplicates", {})
     source_index = manifest.get("source_index", {})
@@ -1638,7 +1942,14 @@ def run_health_check(
 
     orphaned_sidecars = 0
     orphaned_thumbnails = 0
-    canonical_set = {str(rec.get("canonical_path")) for rec in index_records if rec.get("canonical_path")}
+    sidecar_unindexed = (
+        len(sidecar_records) if sidecar_records and not index_records else 0
+    )
+    canonical_set = {
+        Path(str(rec.get("canonical_path"))).expanduser().resolve().as_posix()
+        for rec in index_records
+        if rec.get("canonical_path")
+    }
     if canonical_set:
         for sidecar in out_root.glob("*.json"):
             if sidecar.name in {"manifest.json", "index-summary.json"}:
@@ -1655,10 +1966,14 @@ def run_health_check(
             if isinstance(sidecar_payload, dict):
                 path_value = sidecar_payload.get("canonical_path")
                 if isinstance(path_value, str):
-                    canonical_from_sidecar = path_value
-            if canonical_from_sidecar and canonical_from_sidecar not in canonical_set:
-                orphaned_sidecars += 1
-            elif sidecar.stem not in {Path(p).stem for p in canonical_set}:
+                    canonical_from_sidecar = (
+                        Path(path_value).expanduser().resolve().as_posix()
+                    )
+            if canonical_from_sidecar:
+                if canonical_from_sidecar not in canonical_set:
+                    orphaned_sidecars += 1
+                continue
+            if sidecar.stem not in {Path(p).stem for p in canonical_set}:
                 orphaned_sidecars += 1
 
         for sidecar in (out_root / "_thumbnails").rglob("*.jpg"):
@@ -1668,7 +1983,19 @@ def run_health_check(
                     orphaned_thumbnails += 1
 
     return {
-        "status": "ok" if not any((index_orphaned, processed_missing, duplicates_missing, orphaned_sidecars, orphaned_thumbnails)) else "degraded",
+        "status": "ok"
+        if not any(
+            (
+                index_orphaned,
+                processed_missing,
+                duplicates_missing,
+                orphaned_sidecars,
+                orphaned_thumbnails,
+                sidecar_unindexed,
+                skipped_sidecars,
+            )
+        )
+        else "degraded",
         "index_rows": len(index_records),
         "index_orphaned": index_orphaned,
         "index_missing_canonical": index_missing_canonical[:20],
@@ -1676,11 +2003,16 @@ def run_health_check(
         "duplicates_missing": duplicates_missing,
         "source_index_entries": len(source_entries),
         "source_index_missing": sum(
-            1 for meta in source_entries.values()
-            if isinstance(meta.get("canonical_path", ""), str) and not Path(meta.get("canonical_path", "")).exists()
+            1
+            for meta in source_entries.values()
+            if isinstance(meta.get("canonical_path", ""), str)
+            and not Path(meta.get("canonical_path", "")).exists()
         ),
         "orphaned_sidecars": orphaned_sidecars,
         "orphaned_thumbnails": orphaned_thumbnails,
+        "sidecar_rows": len(sidecar_records),
+        "sidecar_unindexed": sidecar_unindexed,
+        "skipped_sidecars": skipped_sidecars,
         "hash_index_size": len(hash_index) if isinstance(hash_index, dict) else 0,
     }
 
@@ -1701,7 +2033,9 @@ def prune_orphan_outputs(
     if not canonical_set:
         return removed
 
-    canonical_resolved = {str(Path(path).resolve()) for path in canonical_set if isinstance(path, str)}
+    canonical_resolved = {
+        str(Path(path).resolve()) for path in canonical_set if isinstance(path, str)
+    }
     canonical_stems = {Path(path).stem for path in canonical_resolved}
 
     for sidecar in out_root.glob("*.json"):
@@ -1742,7 +2076,9 @@ def prune_orphan_outputs(
                 try:
                     thumb.unlink()
                 except OSError as exc:
-                    logging.warning("Failed to remove orphan thumbnail %s: %s", thumb, exc)
+                    logging.warning(
+                        "Failed to remove orphan thumbnail %s: %s", thumb, exc
+                    )
 
     if not dry_run:
         thumbnail_dir = out_root / "_thumbnails"
@@ -1777,26 +2113,97 @@ def load_config_file(path: str) -> Dict[str, Any]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Ingest, process, and enrich screen captures")
-    parser.add_argument("--config", type=str, default="", help="Optional JSON config file")
-    parser.add_argument("source", nargs="?", default="", help="Source folder containing screenshots/videos")
-    parser.add_argument("--out", type=str, default=".capture-automation", help="Output root for processed assets")
-    parser.add_argument("--copy", action="store_true", help="Copy instead of moving raw files")
+    parser = argparse.ArgumentParser(
+        description="Ingest, process, and enrich screen captures"
+    )
+    parser.add_argument(
+        "--config", type=str, default="", help="Optional JSON config file"
+    )
+    parser.add_argument(
+        "source",
+        nargs="?",
+        default="",
+        help="Source folder containing screenshots/videos",
+    )
+    parser.add_argument(
+        "--out",
+        type=str,
+        default=".capture-automation",
+        help="Output root for processed assets",
+    )
+    parser.add_argument(
+        "--copy", action="store_true", help="Copy instead of moving raw files"
+    )
     parser.add_argument("--no-ocr", action="store_true", help="Disable OCR")
-    parser.add_argument("--no-thumbnails", action="store_true", help="Disable thumbnail generation")
-    parser.add_argument("--thumbnail-size", type=int, default=1024, help="Max pixel dimension for image PDF thumbnails")
-    parser.add_argument("--video-seek", type=str, default="00:00:01", help="Seek position used for video thumbnails")
-    parser.add_argument("--ocr-lang", type=str, default="eng", help="Tesseract OCR language code")
-    parser.add_argument("--media-types", type=str, default="all", help="Comma-separated media types to include: all,image,video,document")
-    parser.add_argument("--min-size-bytes", type=int, default=0, help="Skip files smaller than this many bytes")
-    parser.add_argument("--max-size-bytes", type=int, default=0, help="Skip files larger than this many bytes (0 = unlimited)")
-    parser.add_argument("--follow-symlinks", action="store_true", help="Follow symlinks when scanning source tree")
-    parser.add_argument("--watch", action="store_true", help="Watch source folder and process newly added files continuously")
-    parser.add_argument("--interval", type=float, default=5.0, help="Watch interval in seconds")
-    parser.add_argument("--watch-jitter", type=float, default=0.0, help="Randomized interval jitter as a fraction (0.0-1.0)")
-    parser.add_argument("--watch-idle-threshold", type=float, default=0.0, help="Stop watch mode after this many seconds with no new work (0 = disabled)")
-    parser.add_argument("--max-runs", type=int, default=0, help="Max watch iterations (0 = unlimited)")
-    parser.add_argument("--cleanup-raw", action="store_true", help="Cleanup stale raw files in source folder when running with --copy")
+    parser.add_argument(
+        "--no-thumbnails", action="store_true", help="Disable thumbnail generation"
+    )
+    parser.add_argument(
+        "--thumbnail-size",
+        type=int,
+        default=1024,
+        help="Max pixel dimension for image PDF thumbnails",
+    )
+    parser.add_argument(
+        "--video-seek",
+        type=str,
+        default="00:00:01",
+        help="Seek position used for video thumbnails",
+    )
+    parser.add_argument(
+        "--ocr-lang", type=str, default="eng", help="Tesseract OCR language code"
+    )
+    parser.add_argument(
+        "--media-types",
+        type=str,
+        default="all",
+        help="Comma-separated media types to include: all,image,video,document",
+    )
+    parser.add_argument(
+        "--min-size-bytes",
+        type=int,
+        default=0,
+        help="Skip files smaller than this many bytes",
+    )
+    parser.add_argument(
+        "--max-size-bytes",
+        type=int,
+        default=0,
+        help="Skip files larger than this many bytes (0 = unlimited)",
+    )
+    parser.add_argument(
+        "--follow-symlinks",
+        action="store_true",
+        help="Follow symlinks when scanning source tree",
+    )
+    parser.add_argument(
+        "--watch",
+        action="store_true",
+        help="Watch source folder and process newly added files continuously",
+    )
+    parser.add_argument(
+        "--interval", type=float, default=5.0, help="Watch interval in seconds"
+    )
+    parser.add_argument(
+        "--watch-jitter",
+        type=float,
+        default=0.0,
+        help="Randomized interval jitter as a fraction (0.0-1.0)",
+    )
+    parser.add_argument(
+        "--watch-idle-threshold",
+        type=float,
+        default=0.0,
+        help="Stop watch mode after this many seconds with no new work (0 = disabled)",
+    )
+    parser.add_argument(
+        "--max-runs", type=int, default=0, help="Max watch iterations (0 = unlimited)"
+    )
+    parser.add_argument(
+        "--cleanup-raw",
+        action="store_true",
+        help="Cleanup stale raw files in source folder when running with --copy",
+    )
     parser.add_argument(
         "--cleanup-raw-days",
         type=int,
@@ -1851,22 +2258,98 @@ def build_parser() -> argparse.ArgumentParser:
         help="Fail the file when a post-hook fails",
     )
     parser.add_argument("--dry-run", action="store_true", help="List actions only")
-    parser.add_argument("--query", type=str, default="", help="Search index.jsonl and print matches; e.g. --query 'keyword'")
-    parser.add_argument("--query-media", type=str, choices=("all", "image", "video", "document"), default="all", help="Filter query by media type")
-    parser.add_argument("--query-status", type=str, choices=("all", "processed", "duplicate"), default="all", help="Filter query by status")
-    parser.add_argument("--query-limit", type=int, default=50, help="Max query results (0 = unlimited)")
-    parser.add_argument("--query-format", type=str, choices=("json", "jsonl", "paths", "csv"), default="json", help="Query output format")
-    parser.add_argument("--query-required-min", type=int, default=0, help="Fail if query returns fewer than this many records (query mode)")
-    parser.add_argument("--since", type=str, default="", help="Only match captures at or after this date (YYYY-MM-DD or ISO)")
-    parser.add_argument("--until", type=str, default="", help="Only match captures at or before this date (YYYY-MM-DD or ISO)")
-    parser.add_argument("--include", action="append", default=[], help="Include glob pattern(s) under source tree. Repeatable")
-    parser.add_argument("--exclude", action="append", default=[], help="Exclude glob pattern(s) under source tree. Repeatable")
-    parser.add_argument("--max-files", type=int, default=0, help="Process at most this many files this run (0 = unlimited)")
-    parser.add_argument("--json-report", action="store_true", help="Print machine-readable summary to stdout")
-    parser.add_argument("--json-report-format", choices=("json", "csv", "jsonl"), default="json", help="Machine report format (default: json)")
-    parser.add_argument("--repair", action="store_true", help="Rebuild manifest and index from existing processed outputs")
-    parser.add_argument("--repair-orphan-assets", action="store_true", help="Prune orphaned sidecar and thumbnail files during repair")
-    parser.add_argument("--verify", action="store_true", help="Run manifest/index consistency checks and exit")
+    parser.add_argument(
+        "--query",
+        type=str,
+        default="",
+        help="Search index.jsonl and print matches; e.g. --query 'keyword'",
+    )
+    parser.add_argument(
+        "--query-media",
+        type=str,
+        choices=("all", "image", "video", "document"),
+        default="all",
+        help="Filter query by media type",
+    )
+    parser.add_argument(
+        "--query-status",
+        type=str,
+        choices=("all", "processed", "duplicate"),
+        default="all",
+        help="Filter query by status",
+    )
+    parser.add_argument(
+        "--query-limit", type=int, default=50, help="Max query results (0 = unlimited)"
+    )
+    parser.add_argument(
+        "--query-format",
+        type=str,
+        choices=("json", "jsonl", "paths", "csv"),
+        default="json",
+        help="Query output format",
+    )
+    parser.add_argument(
+        "--query-required-min",
+        type=int,
+        default=0,
+        help="Fail if query returns fewer than this many records (query mode)",
+    )
+    parser.add_argument(
+        "--since",
+        type=str,
+        default="",
+        help="Only match captures at or after this date (YYYY-MM-DD or ISO)",
+    )
+    parser.add_argument(
+        "--until",
+        type=str,
+        default="",
+        help="Only match captures at or before this date (YYYY-MM-DD or ISO)",
+    )
+    parser.add_argument(
+        "--include",
+        action="append",
+        default=[],
+        help="Include glob pattern(s) under source tree. Repeatable",
+    )
+    parser.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        help="Exclude glob pattern(s) under source tree. Repeatable",
+    )
+    parser.add_argument(
+        "--max-files",
+        type=int,
+        default=0,
+        help="Process at most this many files this run (0 = unlimited)",
+    )
+    parser.add_argument(
+        "--json-report",
+        action="store_true",
+        help="Print machine-readable summary to stdout",
+    )
+    parser.add_argument(
+        "--json-report-format",
+        choices=("json", "csv", "jsonl"),
+        default="json",
+        help="Machine report format (default: json)",
+    )
+    parser.add_argument(
+        "--repair",
+        action="store_true",
+        help="Rebuild manifest and index from existing processed outputs",
+    )
+    parser.add_argument(
+        "--repair-orphan-assets",
+        action="store_true",
+        help="Prune orphaned sidecar and thumbnail files during repair",
+    )
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="Run manifest/index consistency checks and exit",
+    )
     parser.add_argument(
         "--self-heal",
         action="store_true",
@@ -1877,16 +2360,59 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Prune orphaned sidecars/thumbnails during self-heal repairs",
     )
-    parser.add_argument("--report", type=str, default="", help="Write machine-readable report JSON to file")
-    parser.add_argument("--event-log", type=str, default="", help="Append JSONL automation events to this file")
-    parser.add_argument("--run-id", type=str, default="", help="Optional explicit run id to stamp into outputs")
-    parser.add_argument("--check-source", action="store_true", help="Print source scan summary and exit")
-    parser.add_argument("--fail-on-error", action="store_true", help="Exit non-zero if any processing errors occur")
-    parser.add_argument("--max-errors", type=int, default=0, help="Fail when this many or more errors occur in a run")
-    parser.add_argument("--require-new", type=int, default=0, help="Fail when fewer than this many new files are processed")
-    parser.add_argument("--watch-heartbeat", type=str, default="", help="Write watchdog heartbeat JSON after each watch pass")
-    parser.add_argument("--disable-lock", action="store_true", help="Disable run-lock protection")
-    parser.add_argument("--lock-timeout", type=int, default=120, help="Seconds to wait for lock acquisition")
+    parser.add_argument(
+        "--report",
+        type=str,
+        default="",
+        help="Write machine-readable report JSON to file",
+    )
+    parser.add_argument(
+        "--event-log",
+        type=str,
+        default="",
+        help="Append JSONL automation events to this file",
+    )
+    parser.add_argument(
+        "--run-id",
+        type=str,
+        default="",
+        help="Optional explicit run id to stamp into outputs",
+    )
+    parser.add_argument(
+        "--check-source", action="store_true", help="Print source scan summary and exit"
+    )
+    parser.add_argument(
+        "--fail-on-error",
+        action="store_true",
+        help="Exit non-zero if any processing errors occur",
+    )
+    parser.add_argument(
+        "--max-errors",
+        type=int,
+        default=0,
+        help="Fail when this many or more errors occur in a run",
+    )
+    parser.add_argument(
+        "--require-new",
+        type=int,
+        default=0,
+        help="Fail when fewer than this many new files are processed",
+    )
+    parser.add_argument(
+        "--watch-heartbeat",
+        type=str,
+        default="",
+        help="Write watchdog heartbeat JSON after each watch pass",
+    )
+    parser.add_argument(
+        "--disable-lock", action="store_true", help="Disable run-lock protection"
+    )
+    parser.add_argument(
+        "--lock-timeout",
+        type=int,
+        default=120,
+        help="Seconds to wait for lock acquisition",
+    )
     parser.add_argument(
         "--lock-stale-seconds",
         type=int,
@@ -1899,7 +2425,9 @@ def build_parser() -> argparse.ArgumentParser:
         default=0,
         help="Keep this many historical manifest snapshots (0 = keep only current)",
     )
-    parser.add_argument("--lock-path", type=str, default="", help="Custom lock file path")
+    parser.add_argument(
+        "--lock-path", type=str, default="", help="Custom lock file path"
+    )
     parser.add_argument("--verbose", action="store_true", help="Verbose logs")
     return parser
 
@@ -1965,7 +2493,9 @@ def run_check_source(
 
     counts: Dict[str, int] = {"all": len(files), "image": 0, "video": 0, "document": 0}
     for path in files:
-        counts[media_type_for_ext(path.suffix.lower())] = counts.get(media_type_for_ext(path.suffix.lower()), 0) + 1
+        counts[media_type_for_ext(path.suffix.lower())] = (
+            counts.get(media_type_for_ext(path.suffix.lower()), 0) + 1
+        )
 
     return {
         "source_root": str(source_root),
@@ -2020,16 +2550,23 @@ def emit_report(
                 rows = payload
             elif isinstance(payload, dict):
                 for key, value in payload.items():
-                    rows.append({
-                        "key": key,
-                        "value": json.dumps(value, ensure_ascii=False) if not isinstance(value, (int, float, str, bool, type(None))) else value,
-                    })
+                    rows.append(
+                        {
+                            "key": key,
+                            "value": json.dumps(value, ensure_ascii=False)
+                            if not isinstance(
+                                value, (int, float, str, bool, type(None))
+                            )
+                            else value,
+                        }
+                    )
 
             if rows:
                 output = []
                 if rows:
                     fieldnames = sorted({key for row in rows for key in row.keys()})
                     import io
+
                     buffer = io.StringIO()
                     writer = csv.DictWriter(buffer, fieldnames=fieldnames)
                     writer.writeheader()
@@ -2047,7 +2584,8 @@ def emit_report(
                 text = "\n".join(json.dumps(row, ensure_ascii=False) for row in payload)
             elif isinstance(payload, dict):
                 text = "\n".join(
-                    json.dumps(row, ensure_ascii=False) for row in _jsonl_payload_rows(payload)
+                    json.dumps(row, ensure_ascii=False)
+                    for row in _jsonl_payload_rows(payload)
                 )
             else:
                 text = json.dumps(payload, ensure_ascii=False)
@@ -2059,10 +2597,14 @@ def emit_report(
             rows = payload
         elif isinstance(payload, dict):
             for key, value in payload.items():
-                rows.append({
-                    "key": key,
-                    "value": json.dumps(value, ensure_ascii=False) if not isinstance(value, (int, float, str, bool, type(None))) else value,
-                })
+                rows.append(
+                    {
+                        "key": key,
+                        "value": json.dumps(value, ensure_ascii=False)
+                        if not isinstance(value, (int, float, str, bool, type(None)))
+                        else value,
+                    }
+                )
         if rows:
             if not rows:
                 report_file.write_text("", encoding="utf-8")
@@ -2145,7 +2687,10 @@ def evaluate_run_exit(
     require_new: int,
 ) -> int:
     if fail_on_error and run_stats.get("failed", 0) > 0:
-        logging.error("Failing %s run because fail_on_error is enabled and errors were encountered", mode)
+        logging.error(
+            "Failing %s run because fail_on_error is enabled and errors were encountered",
+            mode,
+        )
         return 2
 
     if max_errors > 0 and run_stats.get("failed", 0) >= max_errors:
@@ -2267,29 +2812,38 @@ def run_once(
         if removed:
             logging.info("Would remove %s stale raw source files", removed)
         if cleanup_state_days > 0:
-            logging.info("State retention would prune entries older than %s days", cleanup_state_days)
+            logging.info(
+                "State retention would prune entries older than %s days",
+                cleanup_state_days,
+            )
         return run_stats
 
     processed_hashes = build_hash_index(manifest)
     records: List[CaptureRecord] = []
     for path in candidate_files:
-        resolved_path = resolve_media_path(path)
-        if not resolved_path.exists():
+        try:
+            resolved_path = resolve_media_path(path)
+            resolved_path.stat()
+        except FileNotFoundError:
             logging.warning("Skipping vanished source file: %s", path)
-            run_stats["failed"] += 1
+            run_stats["skipped"] += 1
             errors = manifest.setdefault("errors", [])
             if isinstance(errors, list):
-                errors.append({
-                    "path": str(path),
-                    "error": "source_missing",
-                    "occurred_at": now_utc_iso(),
-                })
+                errors.append(
+                    {
+                        "path": str(path),
+                        "error": "source_missing",
+                        "occurred_at": now_utc_iso(),
+                    }
+                )
             else:
-                manifest["errors"] = [{
-                    "path": str(path),
-                    "error": "source_missing",
-                    "occurred_at": now_utc_iso(),
-                }]
+                manifest["errors"] = [
+                    {
+                        "path": str(path),
+                        "error": "source_missing",
+                        "occurred_at": now_utc_iso(),
+                    }
+                ]
             continue
         path = resolved_path
         try:
@@ -2320,29 +2874,74 @@ def run_once(
                     run_stats["duplicates"] += 1
                 elif record.status == "processed":
                     run_stats["new"] += 1
-        except Exception as exc:  # pragma: no cover - broad catch to keep pipeline resilient
+        except FileNotFoundError as exc:
+            if "source_missing" not in str(exc):
+                run_stats["failed"] += 1
+                bump_stat(manifest, "errors")
+                errors = manifest.setdefault("errors", [])
+                if isinstance(errors, list):
+                    errors.append(
+                        {
+                            "path": str(path),
+                            "error": str(exc),
+                            "occurred_at": now_utc_iso(),
+                        }
+                    )
+                else:
+                    manifest["errors"] = [
+                        {
+                            "path": str(path),
+                            "error": str(exc),
+                            "occurred_at": now_utc_iso(),
+                        }
+                    ]
+                continue
+            logging.warning("Skipping vanished source file during processing: %s", path)
+            run_stats["skipped"] += 1
+            if manifest.get("errors") is None or not isinstance(
+                manifest.get("errors"), list
+            ):
+                manifest["errors"] = []
+            manifest["errors"].append(
+                {
+                    "path": str(path),
+                    "error": "source_missing",
+                    "occurred_at": now_utc_iso(),
+                }
+            )
+        except (
+            Exception
+        ) as exc:  # pragma: no cover - broad catch to keep pipeline resilient
             logging.exception("Failed processing %s", path)
             bump_stat(manifest, "errors")
             run_stats["failed"] += 1
             errors = manifest.setdefault("errors", [])
             if isinstance(errors, list):
-                errors.append({
-                    "path": str(path),
-                    "error": str(exc),
-                    "occurred_at": now_utc_iso(),
-                })
+                errors.append(
+                    {
+                        "path": str(path),
+                        "error": str(exc),
+                        "occurred_at": now_utc_iso(),
+                    }
+                )
             else:
-                manifest["errors"] = [{
-                    "path": str(path),
-                    "error": str(exc),
-                    "occurred_at": now_utc_iso(),
-                }]
+                manifest["errors"] = [
+                    {
+                        "path": str(path),
+                        "error": str(exc),
+                        "occurred_at": now_utc_iso(),
+                    }
+                ]
 
-    index_rows, index_pruned = build_index(records, out_root, retention_days=cleanup_state_days)
+    index_rows, index_pruned = build_index(
+        records, out_root, retention_days=cleanup_state_days
+    )
     run_stats["index_rows"] = index_rows
     run_stats["index_pruned"] = index_pruned
 
-    prune_summary = prune_manifest_state(manifest, out_root, retention_days=cleanup_state_days)
+    prune_summary = prune_manifest_state(
+        manifest, out_root, retention_days=cleanup_state_days
+    )
     run_stats["state_pruned_processed"] = prune_summary["pruned_processed"]
     run_stats["state_pruned_duplicates"] = prune_summary["pruned_duplicates"]
     run_stats["state_pruned_hash_index"] = prune_summary["pruned_hash_index"]
@@ -2378,17 +2977,25 @@ def main() -> None:
     do_ocr = not args.no_ocr
     make_thumbnail = not args.no_thumbnails
     do_copy = args.copy
-    run_id = args.run_id.strip() if args.run_id else f"run-{int(time.time())}-{os.getpid()}"
+    run_id = (
+        args.run_id.strip() if args.run_id else f"run-{int(time.time())}-{os.getpid()}"
+    )
     report_payload: Dict[str, Any]
 
-    requested_media_types = [item.strip().lower() for item in str(args.media_types).split(",") if item.strip()]
+    requested_media_types = [
+        item.strip().lower()
+        for item in str(args.media_types).split(",")
+        if item.strip()
+    ]
     if not requested_media_types or "all" in requested_media_types:
         allowed_media_types: Set[str] = {"all", "image", "video", "document"}
     else:
         requested_set = set(requested_media_types)
         valid_types = {"image", "video", "document"}
         if not requested_set.issubset(valid_types):
-            raise SystemExit(f"Invalid --media-types value(s): {sorted(requested_set - valid_types)}")
+            raise SystemExit(
+                f"Invalid --media-types value(s): {sorted(requested_set - valid_types)}"
+            )
         allowed_media_types = requested_set
 
     if args.query:
@@ -2398,7 +3005,11 @@ def main() -> None:
         return
 
     manifest_path = out_root / "manifest.json"
-    lock_path = Path(args.lock_path).expanduser().resolve() if args.lock_path else manifest_path.with_suffix(".lock")
+    lock_path = (
+        Path(args.lock_path).expanduser().resolve()
+        if args.lock_path
+        else manifest_path.with_suffix(".lock")
+    )
 
     def make_lock_context() -> Iterator[None]:
         if args.disable_lock:
@@ -2413,7 +3024,9 @@ def main() -> None:
     with make_lock_context():
         if args.check_source:
             manifest = load_manifest(manifest_path)
-            manifest.setdefault("stats", {})["check_runs"] = manifest.setdefault("stats", {}).get("check_runs", 0) + 1
+            manifest.setdefault("stats", {})["check_runs"] = (
+                manifest.setdefault("stats", {}).get("check_runs", 0) + 1
+            )
             write_manifest(
                 manifest_path,
                 manifest,
@@ -2494,7 +3107,9 @@ def main() -> None:
         if args.cleanup_state_days < 0:
             raise SystemExit("--cleanup-state-days cannot be negative")
         if args.cleanup_raw and not args.copy:
-            logging.warning("--cleanup-raw has effect only in --copy mode; it will be skipped.")
+            logging.warning(
+                "--cleanup-raw has effect only in --copy mode; it will be skipped."
+            )
 
         manifest = load_manifest(manifest_path)
         manifest["run_id"] = run_id
@@ -2546,7 +3161,9 @@ def main() -> None:
             interval = max(1.0, float(args.interval))
             jitter = max(0.0, min(1.0, float(args.watch_jitter)))
             idle_seconds = 0.0
-            logging.info("Starting watch mode on %s (every %.1fs)", source_root, interval)
+            logging.info(
+                "Starting watch mode on %s (every %.1fs)", source_root, interval
+            )
             runs = 0
             watch_exit_code = 0
             try:
@@ -2583,7 +3200,9 @@ def main() -> None:
                         thumbnail_size=max(1, args.thumbnail_size),
                         video_seek=args.video_seek,
                     )
-                    if any(run_stats.get(k, 0) for k in ("new", "duplicates", "failed")):
+                    if any(
+                        run_stats.get(k, 0) for k in ("new", "duplicates", "failed")
+                    ):
                         logging.info(
                             "Watch pass %s: new=%s duplicates=%s failed=%s",
                             runs,
@@ -2592,7 +3211,9 @@ def main() -> None:
                             run_stats.get("failed", 0),
                         )
 
-                    if any(run_stats.get(k, 0) > 0 for k in ("new", "duplicates", "failed")):
+                    if any(
+                        run_stats.get(k, 0) > 0 for k in ("new", "duplicates", "failed")
+                    ):
                         idle_seconds = 0.0
                     else:
                         idle_seconds += interval
@@ -2614,9 +3235,13 @@ def main() -> None:
                             "idle_seconds": idle_seconds,
                             "stats": run_stats,
                         }
-                        heartbeat_path = Path(args.watch_heartbeat).expanduser().resolve()
+                        heartbeat_path = (
+                            Path(args.watch_heartbeat).expanduser().resolve()
+                        )
                         heartbeat_path.parent.mkdir(parents=True, exist_ok=True)
-                        heartbeat_path.write_text(json.dumps(heartbeat_payload, indent=2), encoding="utf-8")
+                        heartbeat_path.write_text(
+                            json.dumps(heartbeat_payload, indent=2), encoding="utf-8"
+                        )
                         log_event(
                             event_log_path=args.event_log,
                             payload={
@@ -2682,7 +3307,10 @@ def main() -> None:
                         break
                     if args.max_runs and runs >= args.max_runs:
                         break
-                    if args.watch_idle_threshold > 0 and idle_seconds >= args.watch_idle_threshold:
+                    if (
+                        args.watch_idle_threshold > 0
+                        and idle_seconds >= args.watch_idle_threshold
+                    ):
                         logging.info(
                             "Watch idle threshold reached (%.1fs); exiting.",
                             args.watch_idle_threshold,
@@ -2692,7 +3320,9 @@ def main() -> None:
                     elapsed = time.time() - run_start
                     sleep_for = max(0.0, interval - elapsed)
                     if jitter > 0:
-                        sleep_for += random.uniform(-sleep_for * jitter, sleep_for * jitter)
+                        sleep_for += random.uniform(
+                            -sleep_for * jitter, sleep_for * jitter
+                        )
                     if sleep_for < 0:
                         sleep_for = 0.0
                     time.sleep(sleep_for)
