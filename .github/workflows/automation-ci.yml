@@ -1,27 +1,34 @@
 name: capture-automation-ci
 
-# Runner-pickup status (2026-06-08, 22 confirmed failures today):
+# Runner-pickup status (2026-06-08, 25+ confirmed failures today):
 # this workflow's "CLI smoke" job has been failing consistently with
-# runner_id: 0 / zero steps / ~3-second death across 22 runs on this
+# runner_id: 0 / zero steps / ~3-second death across 25+ runs on this
 # repo. The failure is a GitHub-side hosted-runner handoff problem
 # specific to this repo, NOT a code problem. Cross-account evidence
 # (limen and a-i--skills on the same account, same day, same runner
-# pool) shows the pool is healthy for other repos. An attempted fix
-# that swapped ubuntu-latest -> ubuntu-22.04 (a different image
-# label, different runner pool) failed the same way, falsifying the
-# image-label theory. No self-hosted runners are registered on this
-# account. The local release verifier (`npm run release:verify`) is
-# the ground truth and is green on the merge commit; the failing
-# GitHub Actions check is informational under the current
-# branch-protection rules (no required status checks on main).
+# pool) shows the pool is healthy for other repos. The image-label
+# theory has been falsified (ubuntu-22.04 failed the same way). The
+# local release verifier (`npm run release:verify`) is the ground
+# truth and is green on the merge commit; the failing GitHub Actions
+# check is informational under the current branch-protection rules
+# (no required status checks on main).
 #
-# Recommended next actions if a hard green check is needed in the
-# future: (a) register a self-hosted runner for this repo and add a
-# `runs-on: self-hosted` job that runs first with `continue-on-error:
-# true`, falling through to the hosted runner if no self-hosted
-# runner is registered; (b) move the capture-automation CI to a
-# separate repository; (c) wait for the GitHub-side transient to
-# clear. All three are out of scope for the current branch.
+# This branch experiments with a self-hosted-first / hosted-fallback
+# pattern. The hypothesis: with `runs-on: self-hosted` first, jobs
+# that cannot find a self-hosted runner will fail with a clear
+# 'no matching runner' error rather than the silent 3-second
+# pickup-death, and the hosted job will run as a fallback via
+# `needs: ... if: always()`. If the hosted-fallback job produces
+# a clean run on this repo, the runner-pickup issue is
+# specifically a *first-choice hosted* handoff problem and routing
+# around it breaks the broken path. If the hosted-fallback job
+# also dies the same way, the issue is not first-choice-specific
+# and a different remediation is needed.
+#
+# Recommended next actions if the hosted fallback also dies:
+# (a) register a real self-hosted runner for this repo, or
+# (b) move the capture-automation CI to a separate repository, or
+# (c) wait for the GitHub-side transient to clear.
 
 on:
   workflow_dispatch:
@@ -29,9 +36,23 @@ on:
   pull_request:
 
 jobs:
-  smoke:
+  smoke-self-hosted:
+    name: CLI smoke (self-hosted, optional)
+    runs-on: self-hosted
+    continue-on-error: true
+    timeout-minutes: 2
+    steps:
+      - name: Echo self-hosted marker
+        run: |
+          echo "running on self-hosted runner"
+          echo "RUNNER_NAME=${RUNNER_NAME:-unset}"
+
+  smoke-hosted:
     name: CLI smoke
+    needs: smoke-self-hosted
+    if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
