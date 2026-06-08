@@ -27,7 +27,14 @@ A clean-room copy without `.git`, runtime outputs, caches, or local generated st
 
 ## Remote CI status
 
-Remote workflow run `27153235906` was triggered with `workflow_dispatch` for commit `90a66921e3a5d5e6c33cabd098693bcacaaaf54e`.
+Pushed head: `0c7b30a2945e3cb0f4d220cdf347b764f8ffb31b`.
+
+Remote workflow runs observed for this head:
+
+- `27153338041` (`push`) failed before checkout.
+- `27153340311` (`pull_request`) failed before checkout.
+
+Earlier workflow run `27153235906` was triggered with `workflow_dispatch` for commit `90a66921e3a5d5e6c33cabd098693bcacaaaf54e` and failed for the same reason.
 
 GitHub Actions did not execute repository steps. The job failed before checkout/setup with this annotation:
 
@@ -41,6 +48,8 @@ This means remote CI pass/fail for the code is not yet proven. Once billing/spen
 gh workflow run capture-automation-ci --ref chore/capture-source-race-hardening
 gh run watch <run-id> --exit-status
 ```
+
+Additional pushes may create newer failed workflow runs with the same pre-checkout billing annotation. Use `gh run list --branch chore/capture-source-race-hardening` for the latest run IDs after billing is restored.
 
 ## Release decision
 
