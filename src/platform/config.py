@@ -17,14 +17,25 @@ def repo_root() -> Path:
 
 
 def processor_script() -> Path:
-    return Path(__file__).resolve().parents[2] / "src" / "capture_automation" / "process_captures.py"
+    return (
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "capture_automation"
+        / "process_captures.py"
+    )
 
 
 def default_source_dir() -> Path:
+    raw = os.environ.get("CAPTURE_PLATFORM_SOURCE", "").strip()
+    if raw:
+        return Path(raw).expanduser().resolve()
     return repo_root() / "data" / "captures" / "raw"
 
 
 def default_out_dir() -> Path:
+    raw = os.environ.get("CAPTURE_PLATFORM_OUT", "").strip()
+    if raw:
+        return Path(raw).expanduser().resolve()
     return repo_root() / ".capture-automation"
 
 
@@ -105,19 +116,25 @@ def validate_choice(value: str, *, field: str, allowed: Iterable[str]) -> str:
     normalized = str(value).strip().lower()
     allowed_set = set(allowed)
     if normalized not in allowed_set:
-        raise PlatformValidationError(f"{field} must be one of: {', '.join(sorted(allowed_set))}")
+        raise PlatformValidationError(
+            f"{field} must be one of: {', '.join(sorted(allowed_set))}"
+        )
     return normalized
 
 
 def validate_media_types(value: str) -> str:
-    raw_items = [item.strip().lower() for item in str(value or "all").split(",") if item.strip()]
+    raw_items = [
+        item.strip().lower() for item in str(value or "all").split(",") if item.strip()
+    ]
     if not raw_items or "all" in raw_items:
         return "all"
     allowed = {"image", "video", "document"}
     requested = set(raw_items)
     invalid = requested - allowed
     if invalid:
-        raise PlatformValidationError(f"media_types contains invalid values: {', '.join(sorted(invalid))}")
+        raise PlatformValidationError(
+            f"media_types contains invalid values: {', '.join(sorted(invalid))}"
+        )
     return ",".join(item for item in raw_items if item in allowed)
 
 
@@ -133,7 +150,9 @@ def validate_run_id(value: Any) -> str:
     if not text:
         return ""
     if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,96}", text):
-        raise PlatformValidationError("run_id may contain only letters, numbers, dot, underscore, colon, and dash")
+        raise PlatformValidationError(
+            "run_id may contain only letters, numbers, dot, underscore, colon, and dash"
+        )
     return text
 
 
