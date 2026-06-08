@@ -32,31 +32,31 @@ MCP_PREFLIGHT="${CAPTURE_PLATFORM_MCP_PREFLIGHT:-1}"
 
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    --host)
-      HOST="${2:?--host requires a value}"
-      shift 2
-      ;;
-    --port)
-      PORT="${2:?--port requires a value}"
-      shift 2
-      ;;
-    --source)
-      SOURCE_DIR="${2:?--source requires a value}"
-      shift 2
-      ;;
-    --out)
-      OUT_DIR="${2:?--out requires a value}"
-      shift 2
-      ;;
-    *)
-      echo "Unknown argument: $1" >&2
-      usage >&2
-      exit 2
-      ;;
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  --host)
+    HOST="${2:?--host requires a value}"
+    shift 2
+    ;;
+  --port)
+    PORT="${2:?--port requires a value}"
+    shift 2
+    ;;
+  --source)
+    SOURCE_DIR="${2:?--source requires a value}"
+    shift 2
+    ;;
+  --out)
+    OUT_DIR="${2:?--out requires a value}"
+    shift 2
+    ;;
+  *)
+    echo "Unknown argument: $1" >&2
+    usage >&2
+    exit 2
+    ;;
   esac
 done
 
@@ -120,4 +120,8 @@ fi
 
 echo "Capture platform API/dashboard: http://${HOST}:${PORT}/"
 echo "MCP stdio command: python3 -m src.platform.mcp_server"
+export CAPTURE_PLATFORM_HOST="$HOST"
+export CAPTURE_PLATFORM_PORT="$PORT"
+export CAPTURE_PLATFORM_SOURCE="$SOURCE_DIR"
+export CAPTURE_PLATFORM_OUT="$OUT_DIR"
 exec python3 -m src.platform.api_server --host "$HOST" --port "$PORT"
