@@ -10,7 +10,12 @@ from pathlib import Path
 
 from .runtime import run_capture_action
 from .runtime import load_snapshot
-from .config import PlatformValidationError, default_out_dir, default_source_dir, normalize_platform_path
+from .config import (
+    PlatformValidationError,
+    default_out_dir,
+    default_source_dir,
+    normalize_platform_path,
+)
 
 
 def _reply(correlation: Optional[Any], payload: Dict[str, Any]) -> None:
@@ -104,20 +109,28 @@ def tool_list() -> Dict[str, Any]:
 
 
 def _status_payload(arguments: Dict[str, Any]) -> Dict[str, Any]:
-    source = normalize_platform_path(arguments.get("source"), default=default_source_dir(), field="source")
-    out = normalize_platform_path(arguments.get("out"), default=default_out_dir(), field="out")
+    source = normalize_platform_path(
+        arguments.get("source"), default=default_source_dir(), field="source"
+    )
+    out = normalize_platform_path(
+        arguments.get("out"), default=default_out_dir(), field="out"
+    )
     snapshot = load_snapshot(Path(out))
-    snapshot.update({
-        "ok": True,
-        "mode": "status",
-        "tool": "capture_status",
-        "source": str(source),
-        "out": str(out),
-    })
+    snapshot.update(
+        {
+            "ok": True,
+            "mode": "status",
+            "tool": "capture_status",
+            "source": str(source),
+            "out": str(out),
+        }
+    )
     return snapshot
 
 
-def _handle_tool_call(message_id: Optional[Any], name: str, arguments: Dict[str, Any]) -> None:
+def _handle_tool_call(
+    message_id: Optional[Any], name: str, arguments: Dict[str, Any]
+) -> None:
     if name == "capture_status":
         try:
             response = _status_payload(arguments)
@@ -143,20 +156,26 @@ def _handle_tool_call(message_id: Optional[Any], name: str, arguments: Dict[str,
     if result.error == "validation_error":
         _reply(message_id, _error(message_id, -32602, result.stderr))
         return
-    _reply(message_id, _ok(message_id, {
-        "tool": name,
-        "ok": result.ok,
-        "run_id": result.run_id,
-        "mode": result.mode,
-        "duration_ms": result.duration_ms,
-        "return_code": result.return_code,
-        "payload": result.payload,
-        "error": result.error,
-        "event_log": result.event_log,
-        "report": result.report,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
-    }))
+    _reply(
+        message_id,
+        _ok(
+            message_id,
+            {
+                "tool": name,
+                "ok": result.ok,
+                "run_id": result.run_id,
+                "mode": result.mode,
+                "duration_ms": result.duration_ms,
+                "return_code": result.return_code,
+                "payload": result.payload,
+                "error": result.error,
+                "event_log": result.event_log,
+                "report": result.report,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+            },
+        ),
+    )
 
 
 def _handle_message(message: Dict[str, Any]) -> None:
@@ -166,12 +185,21 @@ def _handle_message(message: Dict[str, Any]) -> None:
         _reply(message_id, _error(message_id, -32600, "missing method"))
         return
 
+    if isinstance(method, str) and method.startswith("notifications/"):
+        return
+
     if method == "initialize":
-        _reply(message_id, _ok(message_id, {
-            "protocolVersion": "2024-11-05",
-            "capabilities": {"tools": {"listChanged": False}},
-            "serverInfo": {"name": "screen-capture-platform", "version": "1.0"},
-        }))
+        _reply(
+            message_id,
+            _ok(
+                message_id,
+                {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {"tools": {"listChanged": False}},
+                    "serverInfo": {"name": "screen-capture-platform", "version": "1.0"},
+                },
+            ),
+        )
         return
 
     if method == "tools/list":
