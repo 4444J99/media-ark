@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="280" viewBox="0 0 1200 280" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#1f2937"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="280" fill="url(#bg)"/>
+  <text x="60" y="120" fill="#c9d1d9" font-size="52" font-family="Arial, Helvetica, sans-serif" font-weight="700">Screen Capture Automation</text>
+  <text x="60" y="175" fill="#8b949e" font-size="30" font-family="Arial, Helvetica, sans-serif">Local-First Capture Pipeline</text>
+  <text x="60" y="225" fill="#58a6ff" font-size="24" font-family="Arial, Helvetica, sans-serif">Automating the boring parts so teams can ship faster.</text>
+</svg>

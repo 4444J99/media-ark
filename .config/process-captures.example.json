@@ -1,0 +1,15 @@
+{
+  "source": "data/captures/raw",
+  "out": ".capture-automation",
+  "copy": false,
+  "media_types": "image,video,document",
+  "ocr_lang": "eng",
+  "thumbnail_size": 1024,
+  "video_seek": "00:00:02",
+  "cleanup_state_days": 30,
+  "watch_idle_threshold": 1200,
+  "watch_jitter": 0.2,
+  "json_report_format": "json",
+  "require_new": 1,
+  "fail_on_error": true
+}

@@ -1,0 +1,32 @@
+# Environment and cache
+*.pyc
+*.pyo
+*.log
+*.tmp
+*.swp
+*~
+.DS_Store
+Thumbs.db
+.coverage
+.pytest_cache/
+.mypy_cache/
+.pyre/
+.tox/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# Node dependencies
+node_modules/
+
+# Build artifacts
+build/
+dist/
+coverage/
+
+# Generated capture data/state
+.capture-automation/
+data/captures/raw/
+*.egg-info/

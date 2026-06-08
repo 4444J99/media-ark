@@ -1,0 +1,26 @@
+name: capture-automation-ci
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  smoke:
+    name: CLI smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verify CLI entrypoint
+        run: |
+          python3 src/capture_automation/process_captures.py --help | head -n 5
+          python3 src/capture_automation/process_captures.py data/captures/raw --out .capture-automation --dry-run --json-report --max-files 1 > /tmp/cli-smoke.json
+          test -s /tmp/cli-smoke.json
