@@ -3,11 +3,17 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
+    "test": "python3 -m unittest discover -s tests -p 'test_*.py'",
+    "release:verify": "python3 tools/capture-automation/verify_release.py",
     "help": "python3 src/capture_automation/process_captures.py --help",
     "capture:dry-run": "python3 src/capture_automation/process_captures.py data/captures/raw --out .capture-automation --dry-run",
     "capture:run": "./tools/capture-automation/run_capture_automation.sh data/captures/raw .capture-automation",
     "capture:watch": "./tools/capture-automation/capture_watch_service.sh data/captures/raw .capture-automation --watch",
-    "capture:pipeline": "./tools/capture-automation/capture_automation_pipeline.sh data/captures/raw .capture-automation"
+    "capture:pipeline": "./tools/capture-automation/capture_automation_pipeline.sh data/captures/raw .capture-automation",
+    "platform:start": "./tools/capture-automation/start_capture_platform.sh",
+    "platform:api": "python3 -m src.platform.api_server",
+    "platform:mcp": "python3 -m src.platform.mcp_server",
+    "platform:help": "python3 -m src.platform.api_server --help"
   },
   "license": "MIT"
 }

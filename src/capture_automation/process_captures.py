@@ -1192,6 +1192,112 @@ def write_index_rows(
     return len(rows)
 
 
+def iter_sidecar_paths(out_root: Path) -> Iterable[Path]:
+    for sidecar in sorted(out_root.glob("*.json")):
+        if sidecar.name in {"manifest.json", "index-summary.json"}:
+            continue
+        if sidecar.name == "config.json":
+            continue
+        if sidecar.name.endswith(".backup.json"):
+            continue
+        if sidecar.is_file():
+            yield sidecar
+
+
+def record_from_sidecar(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    canonical_path = payload.get("canonical_path")
+    if not isinstance(canonical_path, str) or not canonical_path.strip():
+        return None
+    canonical = Path(canonical_path).expanduser().resolve()
+    if not canonical.exists():
+        return None
+
+    status = str(payload.get("status", "processed")).strip().lower()
+    if status not in {"processed", "duplicate"}:
+        status = "processed"
+
+    media_type = payload.get("media_type")
+    if not isinstance(media_type, str) or media_type not in {"image", "video", "document"}:
+        media_type = media_type_for_ext(canonical.suffix.lower())
+
+    tags = payload.get("tags", [])
+    if not isinstance(tags, list):
+        tags = []
+
+    dimensions = payload.get("dimensions", {})
+    if not isinstance(dimensions, dict):
+        dimensions = {}
+
+    captured_at = str(payload.get("captured_at") or "")
+    created_at = str(
+        payload.get("created_at")
+        or payload.get("processed_at")
+        or payload.get("seen_at")
+        or captured_at
+    )
+
+    return {
+        "id": str(payload.get("id") or str(payload.get("sha256", ""))[:12]),
+        "source_path": str(payload.get("source_path") or ""),
+        "canonical_path": str(canonical),
+        "media_type": media_type,
+        "sha256": str(payload.get("sha256") or ""),
+        "size_bytes": int(payload.get("size_bytes") or canonical.stat().st_size),
+        "captured_at": captured_at,
+        "title": str(payload.get("title") or ("duplicate" if status == "duplicate" else canonical.stem)),
+        "dimensions": dimensions,
+        "duration": payload.get("duration_seconds", payload.get("duration")),
+        "ocr_text": payload.get("ocr_text", payload.get("ocr")),
+        "tags": tags,
+        "notes": str(payload.get("notes") or ""),
+        "status": status,
+        "created_at": created_at,
+        "thumbnail": payload.get("thumbnail"),
+    }
+
+
+def load_sidecar_records(out_root: Path) -> Tuple[List[Dict[str, Any]], int]:
+    records: List[Dict[str, Any]] = []
+    skipped = 0
+    for sidecar in iter_sidecar_paths(out_root):
+        try:
+            payload = json.loads(sidecar.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            skipped += 1
+            continue
+        if not isinstance(payload, dict):
+            skipped += 1
+            continue
+        record = record_from_sidecar(payload)
+        if record is None:
+            skipped += 1
+            continue
+        records.append(record)
+    return records, skipped
+
+
+def _record_key(record: Dict[str, Any]) -> Tuple[str, str, str]:
+    return (
+        str(record.get("source_path", "")),
+        str(record.get("canonical_path", "")),
+        str(record.get("status", "")),
+    )
+
+
+def _record_manifest_entry(record: Dict[str, Any], status: str) -> Dict[str, Any]:
+    timestamp_key = "seen_at" if status == "duplicate" else "processed_at"
+    timestamp = str(record.get("created_at") or record.get("captured_at") or now_utc_iso())
+    return {
+        "canonical_path": str(record.get("canonical_path", "")),
+        "source_path": str(record.get("source_path", "")),
+        "sha256": str(record.get("sha256", "")),
+        "size_bytes": int(record.get("size_bytes") or 0),
+        "status": status,
+        timestamp_key: timestamp,
+        "captured_at": str(record.get("captured_at") or ""),
+    }
+
+
 def run_repair_state(
     out_root: Path,
     manifest: Dict[str, Any],
@@ -1199,6 +1305,7 @@ def run_repair_state(
     prune_orphans: bool = False,
 ) -> Dict[str, int]:
     records = load_index_records(out_root)
+    sidecar_records, skipped_sidecars = load_sidecar_records(out_root)
     kept_records: List[Dict[str, Any]] = []
     pruned_index = 0
     for row in records:
@@ -1210,6 +1317,16 @@ def run_repair_state(
             pruned_index += 1
             continue
         kept_records.append(row)
+
+    existing_keys = {_record_key(row) for row in kept_records}
+    recovered_sidecars = 0
+    for row in sidecar_records:
+        key = _record_key(row)
+        if key in existing_keys:
+            continue
+        kept_records.append(row)
+        existing_keys.add(key)
+        recovered_sidecars += 1
 
     kept_canonical = {
         Path(row["canonical_path"]).resolve().as_posix()
@@ -1231,6 +1348,14 @@ def run_repair_state(
             pruned_processed += 1
             continue
         kept_processed[source_path] = meta
+
+    for row in kept_records:
+        if row.get("status") != "processed":
+            continue
+        source_path = str(row.get("source_path") or "")
+        if not source_path:
+            continue
+        kept_processed.setdefault(source_path, _record_manifest_entry(row, "processed"))
     manifest["processed"] = kept_processed
 
     duplicates = manifest.get("duplicates")
@@ -1250,6 +1375,14 @@ def run_repair_state(
             pruned_duplicates += 1
             continue
         kept_duplicates[source_path] = meta
+
+    for row in kept_records:
+        if row.get("status") != "duplicate":
+            continue
+        source_path = str(row.get("source_path") or "")
+        if not source_path:
+            continue
+        kept_duplicates.setdefault(source_path, _record_manifest_entry(row, "duplicate"))
     manifest["duplicates"] = kept_duplicates
 
     source_index = manifest.get("source_index")
@@ -1269,6 +1402,24 @@ def run_repair_state(
             pruned_source_index += 1
             continue
         kept_source_index[source_path] = meta
+
+    for row in kept_records:
+        source_path = str(row.get("source_path") or "")
+        canonical_path = str(row.get("canonical_path") or "")
+        if not source_path or not canonical_path:
+            continue
+        kept_source_index.setdefault(
+            source_path,
+            {
+                "size_bytes": int(row.get("size_bytes") or 0),
+                "mtime_ns": 0,
+                "status": str(row.get("status") or "processed"),
+                "sha256": str(row.get("sha256") or ""),
+                "canonical_path": canonical_path,
+                "recovered_at": str(row.get("created_at") or row.get("captured_at") or ""),
+                "captured_at": str(row.get("captured_at") or ""),
+            },
+        )
     manifest["source_index"] = kept_source_index
 
     hash_index = manifest.get("hash_index")
@@ -1284,6 +1435,12 @@ def run_repair_state(
             kept_hash_index[digest] = canonical_path
         else:
             pruned_hash += 1
+
+    for row in kept_records:
+        digest = str(row.get("sha256") or "")
+        canonical_path = str(row.get("canonical_path") or "")
+        if len(digest) == 64 and canonical_path:
+            kept_hash_index.setdefault(digest, canonical_path)
     manifest["hash_index"] = kept_hash_index
     manifest["repaired_at"] = now_utc_iso()
 
@@ -1301,6 +1458,8 @@ def run_repair_state(
         "pruned_duplicates": pruned_duplicates,
         "pruned_source_index": pruned_source_index,
         "pruned_hash_index": pruned_hash,
+        "recovered_sidecars": recovered_sidecars,
+        "skipped_sidecars": skipped_sidecars,
         "pruned_orphan_sidecars": prune_summary_orphans["sidecars"],
         "pruned_orphan_thumbnails": prune_summary_orphans["thumbnails"],
         "pruned_orphan_empty_dirs": prune_summary_orphans["empty_dirs"],
@@ -1599,6 +1758,7 @@ def run_health_check(
     manifest: Dict[str, Any],
 ) -> Dict[str, Any]:
     index_records = load_index_records(out_root)
+    sidecar_records, skipped_sidecars = load_sidecar_records(out_root)
     processed = manifest.get("processed", {})
     duplicates = manifest.get("duplicates", {})
     source_index = manifest.get("source_index", {})
@@ -1646,7 +1806,12 @@ def run_health_check(
 
     orphaned_sidecars = 0
     orphaned_thumbnails = 0
-    canonical_set = {str(rec.get("canonical_path")) for rec in index_records if rec.get("canonical_path")}
+    sidecar_unindexed = len(sidecar_records) if sidecar_records and not index_records else 0
+    canonical_set = {
+        Path(str(rec.get("canonical_path"))).expanduser().resolve().as_posix()
+        for rec in index_records
+        if rec.get("canonical_path")
+    }
     if canonical_set:
         for sidecar in out_root.glob("*.json"):
             if sidecar.name in {"manifest.json", "index-summary.json"}:
@@ -1663,10 +1828,12 @@ def run_health_check(
             if isinstance(sidecar_payload, dict):
                 path_value = sidecar_payload.get("canonical_path")
                 if isinstance(path_value, str):
-                    canonical_from_sidecar = path_value
-            if canonical_from_sidecar and canonical_from_sidecar not in canonical_set:
-                orphaned_sidecars += 1
-            elif sidecar.stem not in {Path(p).stem for p in canonical_set}:
+                    canonical_from_sidecar = Path(path_value).expanduser().resolve().as_posix()
+            if canonical_from_sidecar:
+                if canonical_from_sidecar not in canonical_set:
+                    orphaned_sidecars += 1
+                continue
+            if sidecar.stem not in {Path(p).stem for p in canonical_set}:
                 orphaned_sidecars += 1
 
         for sidecar in (out_root / "_thumbnails").rglob("*.jpg"):
@@ -1676,7 +1843,15 @@ def run_health_check(
                     orphaned_thumbnails += 1
 
     return {
-        "status": "ok" if not any((index_orphaned, processed_missing, duplicates_missing, orphaned_sidecars, orphaned_thumbnails)) else "degraded",
+        "status": "ok" if not any((
+            index_orphaned,
+            processed_missing,
+            duplicates_missing,
+            orphaned_sidecars,
+            orphaned_thumbnails,
+            sidecar_unindexed,
+            skipped_sidecars,
+        )) else "degraded",
         "index_rows": len(index_records),
         "index_orphaned": index_orphaned,
         "index_missing_canonical": index_missing_canonical[:20],
@@ -1689,6 +1864,9 @@ def run_health_check(
         ),
         "orphaned_sidecars": orphaned_sidecars,
         "orphaned_thumbnails": orphaned_thumbnails,
+        "sidecar_rows": len(sidecar_records),
+        "sidecar_unindexed": sidecar_unindexed,
+        "skipped_sidecars": skipped_sidecars,
         "hash_index_size": len(hash_index) if isinstance(hash_index, dict) else 0,
     }
 
