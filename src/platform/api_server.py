@@ -42,7 +42,9 @@ def _json(value: Dict[str, Any]) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
-def _write_json(handler: BaseHTTPRequestHandler, status: int, payload: Dict[str, Any]) -> None:
+def _write_json(
+    handler: BaseHTTPRequestHandler, status: int, payload: Dict[str, Any]
+) -> None:
     encoded = _json(payload).encode("utf-8")
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json; charset=utf-8")
@@ -61,7 +63,9 @@ def _read_json_body(handler: BaseHTTPRequestHandler) -> Dict[str, Any]:
     except ValueError as exc:
         raise RequestValidationError("Content-Length must be an integer") from exc
     if length > MAX_JSON_BODY_BYTES:
-        raise RequestValidationError(f"request body must be <= {MAX_JSON_BODY_BYTES} bytes")
+        raise RequestValidationError(
+            f"request body must be <= {MAX_JSON_BODY_BYTES} bytes"
+        )
     body = handler.rfile.read(length)
     if not body:
         return {}
@@ -81,12 +85,16 @@ def _to_int(value: Any, default: int) -> int:
         return default
 
 
-def to_action_payload(path: str, query: Dict[str, Any], method: str, body: Dict[str, Any]) -> Dict[str, Any]:
+def to_action_payload(
+    path: str, query: Dict[str, Any], method: str, body: Dict[str, Any]
+) -> Dict[str, Any]:
     if method.upper() == "GET":
         payload = dict(query)
     else:
-        payload = dict(body)
-    if "source" not in payload and "source" not in query:
+        payload = dict(query)
+        for key, value in body.items():
+            payload[key] = value
+    if "source" not in payload:
         payload.setdefault("source", str(default_source_dir()))
     if "out" not in payload:
         payload.setdefault("out", str(default_out_dir()))
@@ -95,13 +103,19 @@ def to_action_payload(path: str, query: Dict[str, Any], method: str, body: Dict[
 
 
 def _validated_paths(query: Dict[str, Any]) -> tuple[Path, Path]:
-    source = normalize_platform_path(query.get("source"), default=default_source_dir(), field="source")
-    out = normalize_platform_path(query.get("out"), default=default_out_dir(), field="out")
+    source = normalize_platform_path(
+        query.get("source"), default=default_source_dir(), field="source"
+    )
+    out = normalize_platform_path(
+        query.get("out"), default=default_out_dir(), field="out"
+    )
     return source, out
 
 
 def _write_validation_error(handler: BaseHTTPRequestHandler, message: str) -> None:
-    _write_json(handler, 400, {"ok": False, "error": "validation_error", "message": message})
+    _write_json(
+        handler, 400, {"ok": False, "error": "validation_error", "message": message}
+    )
 
 
 class DashboardRequestHandler(BaseHTTPRequestHandler):
@@ -167,8 +181,18 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
             query = self._read_query()
             try:
                 _, out = _validated_paths(query)
-                limit = coerce_int(query.get("limit", 25), field="limit", default=25, minimum=0, maximum=1000)
-                query_text = validate_query(query.get("query", ""), max_chars=500).strip().lower()
+                limit = coerce_int(
+                    query.get("limit", 25),
+                    field="limit",
+                    default=25,
+                    minimum=0,
+                    maximum=1000,
+                )
+                query_text = (
+                    validate_query(query.get("query", ""), max_chars=500)
+                    .strip()
+                    .lower()
+                )
                 status_filter = validate_choice(
                     str(query.get("status", "all")),
                     field="status",
@@ -190,8 +214,6 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
                 with (out / "index.jsonl").open(encoding="utf-8") as handle:
                     records = []
                     for line in handle:
-                        if limit > 0 and len(records) >= limit:
-                            break
                         raw = line.strip()
                         if not raw:
                             continue
@@ -199,13 +221,25 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
                             row = json.loads(raw)
                         except Exception:
                             continue
-                        if query_text and query_text not in json.dumps(row, ensure_ascii=False).lower():
+                        if (
+                            query_text
+                            and query_text
+                            not in json.dumps(row, ensure_ascii=False).lower()
+                        ):
                             continue
-                        if status_filter != "all" and row.get("status") != status_filter:
+                        if (
+                            status_filter != "all"
+                            and row.get("status") != status_filter
+                        ):
                             continue
-                        if media_filter != "all" and row.get("media_type") != media_filter:
+                        if (
+                            media_filter != "all"
+                            and row.get("media_type") != media_filter
+                        ):
                             continue
                         records.append(row)
+                    if limit > 0:
+                        records = records[:limit]
                     status["records"] = records
             _write_json(self, 200, status)
             return
@@ -213,7 +247,9 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/api/manifest"):
             query = self._read_query()
             try:
-                out = normalize_platform_path(query.get("out"), default=default_out_dir(), field="out")
+                out = normalize_platform_path(
+                    query.get("out"), default=default_out_dir(), field="out"
+                )
             except PlatformValidationError as exc:
                 _write_validation_error(self, str(exc))
                 return
@@ -255,7 +291,9 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
             response["error"] = result.error
             response["stdout"] = result.stdout
             response["stderr"] = result.stderr
-            _write_json(self, 400 if result.error == "validation_error" else 500, response)
+            _write_json(
+                self, 400 if result.error == "validation_error" else 500, response
+            )
             return
         _write_json(self, 200, response)
 
