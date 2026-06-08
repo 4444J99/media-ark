@@ -20,3 +20,5 @@ API and MCP actions persist event logs and per-run reports under the selected ou
 Release rollback and recovery commands are documented in [RELEASE.md](RELEASE.md).
 
 Surface-specific onboarding for CLI, API, MCP, and dashboard UI is documented in [ONBOARDING.md](ONBOARDING.md).
+
+Current ship evidence and remote CI status are documented in [SHIP_EVIDENCE.md](SHIP_EVIDENCE.md).

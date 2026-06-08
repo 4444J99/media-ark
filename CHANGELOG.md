@@ -18,6 +18,7 @@ This project follows [Keep a Changelog](https://keepachangelog.com/) and uses
 - Default persisted platform telemetry: API/MCP event logs, per-action reports, and status evidence fields.
 - Surface onboarding documentation for CLI, API, MCP, and dashboard UI.
 - Release verifier command covering engine determinism, API/dashboard startup, MCP, security rejection, docs, telemetry, and recovery.
+- Ship evidence artifact recording local clean-room proof and current remote CI blocker.
 
 ### Changed
 - Centralized source file moved into `src/capture_automation/process_captures.py`.

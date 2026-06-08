@@ -43,3 +43,5 @@ python3 src/capture_automation/process_captures.py data/captures/raw --out .capt
 Use `--repair-orphan-assets` only after preserving a tarball backup; it prunes sidecars and thumbnails that no longer map to canonical assets.
 
 The automated suite verifies this path by processing a capture, deleting `manifest.json` and `index.jsonl`, running `--repair`, then requiring `--verify` to return healthy.
+
+Current release evidence and external CI blockers are tracked in [SHIP_EVIDENCE.md](SHIP_EVIDENCE.md).

@@ -181,4 +181,5 @@ python3 src/capture_automation/process_captures.py data/captures/raw --out .capt
 - [docs/ONBOARDING.md](docs/ONBOARDING.md)
 - [docs/troubleshooting.md](docs/troubleshooting.md)
 - [docs/RELEASE.md](docs/RELEASE.md)
+- [docs/SHIP_EVIDENCE.md](docs/SHIP_EVIDENCE.md)
 - [docs/ROADMAP.md](docs/ROADMAP.md)
