@@ -205,3 +205,47 @@ were run on branch `ci/runner-pickup-recovery`:
    Image label is not the variable. The runner-pickup issue
    persists regardless of the workflow content. Local release
    verifier remains the ground truth.
+
+## Self-hosted-fallback experiment (2026-06-08 20:33 UTC, branch `ci/runner-pickup-self-hosted-fallback`)
+
+Designed a two-job workflow:
+- `smoke-self-hosted` (runs-on: self-hosted, continue-on-error: true, timeout 2 min)
+- `smoke-hosted` (needs: smoke-self-hosted, if: always(), runs-on: ubuntu-latest, timeout 15 min)
+
+**Hypothesis:** with self-hosted first, jobs that cannot find a
+self-hosted runner will fail with a clear error or queue timeout,
+and the hosted-fallback job will run via `if: always()`. If the
+hosted-fallback job produces a clean run, the runner-pickup issue
+is specifically a first-choice hosted handoff problem.
+
+**Result (partial falsification):** the self-hosted job sat in
+queue for 5+ minutes with `runner_id: 0` (no runner assigned).
+`timeout-minutes: 2` did **not** bound the queue wait — it only
+counts the running phase, not the queued phase. The
+`if: always()` dependent job never ran because the self-hosted
+job never finished. Cancelled after 5+ minutes.
+
+**What this means for the runner-pickup question:** the
+self-hosted-fallback pattern *as designed* cannot work on this
+repo without a registered self-hosted runner. The pattern
+depends on the first job *finishing* (success or failure) to
+trigger the fallback; with no runner registered, the first
+job sits in queue indefinitely.
+
+**Alternative patterns that would work** (none of which were
+tested in this session):
+- Use `actions/github-script` to programmatically cancel the
+  self-hosted job after N minutes, then rely on `if: always()`.
+- Use a workflow-level `concurrency` group with
+  `cancel-in-progress: true` to short-circuit.
+- Or just register a self-hosted runner.
+
+**Final state of the experiment branch:** the workflow file
+change is committed on `ci/runner-pickup-self-hosted-fallback`,
+but the experiment did not produce a definitive result on the
+runner-pickup question because of the queue-not-counted-as-
+running timeout semantics. The branch is preserved for
+reference but is not mergeable as-is — the workflow structure
+change (the two-job pattern with the self-hosted-first ordering)
+is a real behavioral change and should only land if the user
+intends to register a self-hosted runner.
