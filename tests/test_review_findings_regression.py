@@ -375,6 +375,77 @@ class TestReviewFindingsRegression(unittest.TestCase):
                 )
             self.assertIn("source_missing", str(ctx.exception))
 
+    def test_4_run_once_inner_catch_narrows_to_source_missing(self) -> None:
+        """Review thread #4: the run_once inner catch (around
+        process_captures.py:2877) must inspect the FileNotFoundError
+        message; only 'source_missing' is a skip, every other
+        FileNotFoundError is a failure recorded in manifest.errors.
+        """
+        from src.capture_automation import process_captures as pc
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            source = tmp / "source"
+            source.mkdir()
+            sample = source / "Screen Shot 2026-06-09 at 10.00.00 AM.png"
+            sample.write_bytes(b"abc")
+            out = tmp / "out"
+            out.mkdir()
+
+            manifest: dict = {
+                "processed": {},
+                "duplicates": {},
+                "source_index": {},
+                "hash_index": {},
+            }
+
+            original_process_file = pc.process_file
+
+            def raise_other_fnf(*args, **kwargs):
+                raise FileNotFoundError("simulated: ocr_temp vanished mid-process")
+
+            pc.process_file = raise_other_fnf
+            try:
+                stats = pc.run_once(
+                    source_root=source,
+                    out_root=out,
+                    do_ocr=False,
+                    make_thumbnail=False,
+                    do_copy=False,
+                    dry_run=False,
+                    manifest=manifest,
+                    post_hooks=[],
+                    post_hook_on="success",
+                    post_hook_timeout=10,
+                    post_hook_stop_on_failure=False,
+                    post_hook_max_attempts=1,
+                    post_hook_retry_delay=0.0,
+                    post_hook_shell=False,
+                    run_id="t",
+                    cleanup_raw=False,
+                    cleanup_raw_days=0,
+                    cleanup_state_days=0,
+                    include_patterns=[],
+                    exclude_patterns=[],
+                    max_files=0,
+                    allowed_media_types={"image"},
+                    min_size_bytes=0,
+                    max_size_bytes=0,
+                    follow_symlinks=False,
+                    ocr_lang="eng",
+                    thumbnail_size=320,
+                    video_seek="00:00:01",
+                )
+            finally:
+                pc.process_file = original_process_file
+
+            self.assertEqual(stats["failed"], 1, stats)
+            self.assertEqual(stats["skipped"], 0, stats)
+            errors = manifest.get("errors", [])
+            self.assertEqual(len(errors), 1, errors)
+            self.assertIn("simulated", errors[0]["error"])
+            self.assertNotIn("source_missing", errors[0]["error"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2771,7 +2771,7 @@ def run_once(
     stats = manifest.setdefault("stats", {})
     if "files_seen_total" not in stats and "total_files_seen" in stats:
         stats["files_seen_total"] = stats.get("total_files_seen", 0)
-    stats["files_seen_total"] += len(all_files)
+    stats["files_seen_total"] = stats.get("files_seen_total", 0) + len(all_files)
     stats["runs"] = stats.get("runs", 0) + 1
 
     run_stats = {
