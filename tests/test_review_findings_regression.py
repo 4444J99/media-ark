@@ -9,10 +9,25 @@ Each test corresponds to one of the threads:
   9:    process_captures.py — skip malformed sidecar size_bytes during repair
   10:   process_captures.py — restore source mtimes when rebuilding source_index
   11:   runtime.py — keep generated platform run IDs unique
+
+Triadic-review evolution (2026-06-09):
+  S1:  no_unguarded_persistent_stats_aug_assign pins the invariant that
+       augmented assignment on the persistent manifest["stats"] surface
+       must use the dict.get(..., 0) + N pattern; bare += is forbidden
+       because setdefault("stats", {}) returns {} on a fresh manifest.
+  S2:  F4 converse (test_4b) covers the positive side of the source_missing
+       narrowing contract (a source_missing FNE lands in run_stats["skipped"],
+       not run_stats["failed"]).
+  S3:  test_4 / test_4b depend on `run_once` calling `process_file` by
+       bare name (module-attribute rebinding). If a future refactor
+       changes that to `pc.process_file` or captures the symbol at
+       import time, the monkeypatch silently no-ops and these tests
+       lose coverage.
 """
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import socket
@@ -380,6 +395,15 @@ class TestReviewFindingsRegression(unittest.TestCase):
         process_captures.py:2877) must inspect the FileNotFoundError
         message; only 'source_missing' is a skip, every other
         FileNotFoundError is a failure recorded in manifest.errors.
+
+        S3 fragility note: this test monkeypatches
+        ``pc.process_file``. It only works because ``run_once`` calls
+        ``process_file`` by bare name inside the same module, so the
+        module-attribute rebinding is picked up at call time. If a
+        future refactor changes that to ``pc.process_file(...)`` or
+        ``from .module import process_file`` at module top, the
+        monkeypatch silently no-ops and this test loses coverage.
+        See S3 in the 2026-06-09 triadic review.
         """
         from src.capture_automation import process_captures as pc
 
@@ -445,6 +469,123 @@ class TestReviewFindingsRegression(unittest.TestCase):
             self.assertEqual(len(errors), 1, errors)
             self.assertIn("simulated", errors[0]["error"])
             self.assertNotIn("source_missing", errors[0]["error"])
+
+    def test_4b_run_once_source_missing_lands_in_skipped(self) -> None:
+        """S2 converse of test_4: a FileNotFoundError whose message
+        contains 'source_missing' must land in run_stats['skipped']
+        and produce manifest.errors[0]['error'] == 'source_missing'.
+
+        This pins the positive side of the narrowing contract; without
+        it, the negative-only test_4 would let a future agent delete
+        the 'if "source_missing" not in str(exc)' check entirely and
+        every FNE would land in 'failed' — the test would still pass.
+        """
+        from src.capture_automation import process_captures as pc
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            source = tmp / "source"
+            source.mkdir()
+            sample = source / "Screen Shot 2026-06-09 at 10.00.00 AM.png"
+            sample.write_bytes(b"abc")
+            out = tmp / "out"
+            out.mkdir()
+
+            manifest: dict = {
+                "processed": {},
+                "duplicates": {},
+                "source_index": {},
+                "hash_index": {},
+            }
+
+            original_process_file = pc.process_file
+
+            def raise_source_missing_fnf(*args, **kwargs):
+                raise FileNotFoundError(
+                    "source_missing: /tmp/Screen Shot 2026-06-09 at 10.00.00 AM.png"
+                )
+
+            pc.process_file = raise_source_missing_fnf
+            try:
+                stats = pc.run_once(
+                    source_root=source,
+                    out_root=out,
+                    do_ocr=False,
+                    make_thumbnail=False,
+                    do_copy=False,
+                    dry_run=False,
+                    manifest=manifest,
+                    post_hooks=[],
+                    post_hook_on="success",
+                    post_hook_timeout=10,
+                    post_hook_stop_on_failure=False,
+                    post_hook_max_attempts=1,
+                    post_hook_retry_delay=0.0,
+                    post_hook_shell=False,
+                    run_id="t",
+                    cleanup_raw=False,
+                    cleanup_raw_days=0,
+                    cleanup_state_days=0,
+                    include_patterns=[],
+                    exclude_patterns=[],
+                    max_files=0,
+                    allowed_media_types={"image"},
+                    min_size_bytes=0,
+                    max_size_bytes=0,
+                    follow_symlinks=False,
+                    ocr_lang="eng",
+                    thumbnail_size=320,
+                    video_seek="00:00:01",
+                )
+            finally:
+                pc.process_file = original_process_file
+
+            self.assertEqual(stats["skipped"], 1, stats)
+            self.assertEqual(stats["failed"], 0, stats)
+            errors = manifest.get("errors", [])
+            self.assertEqual(len(errors), 1, errors)
+            self.assertEqual(errors[0]["error"], "source_missing", errors)
+
+    def test_s1_no_unguarded_persistent_stats_aug_assign(self) -> None:
+        """S1 invariant: the persistent ``manifest.setdefault('stats', {})``
+        surface must not be mutated with a bare augmented-assign
+        (``stats[k] += n``) anywhere in process_captures.py. The
+        setdefault returns ``{}`` on a fresh manifest, so ``+=``
+        would KeyError on first run before processing a single file.
+
+        The fix in PR #8 used ``stats.get(k, 0) + n`` for the same
+        reason. This test pins the invariant so a future contribution
+        cannot reintroduce the same class of bug. ``run_stats`` (a
+        fresh dict built per call) is exempt.
+        """
+        source = PROCESSOR.read_text()
+        tree = ast.parse(source)
+
+        offenders: list[tuple[int, str]] = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.AugAssign):
+                continue
+            target = node.target
+            if not isinstance(target, ast.Subscript):
+                continue
+            if not isinstance(target.value, ast.Name):
+                continue
+            if target.value.id != "stats":
+                continue
+            offenders.append((node.lineno, ast.unparse(node)))
+
+        self.assertEqual(
+            offenders,
+            [],
+            (
+                "Bare augmented assignment on a `stats` Subscript "
+                "target is forbidden on the persistent "
+                "manifest['stats'] surface. Use "
+                "stats[k] = stats.get(k, 0) + n. "
+                "run_stats (per-call fresh dict) is the only safe "
+                "target. Offending lines: " + repr(offenders)
+            ),
+        )
 
 
 if __name__ == "__main__":
