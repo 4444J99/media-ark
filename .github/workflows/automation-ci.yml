@@ -1,9 +1,17 @@
 name: capture-automation-ci
 
-# Runner-pickup status (2026-06-08, 25+ confirmed failures today):
-# this workflow's "CLI smoke" job has been failing consistently with
-# runner_id: 0 / zero steps / ~3-second death across 25+ runs on this
-# repo. The failure is a GitHub-side hosted-runner handoff problem
+# Runner-pickup status (2026-06-09, 27+ confirmed failures across
+# 2 image labels, 4 event types, 4+ runner IDs, 8+ branches):
+# this workflow's hosted-runner job has been failing consistently
+# with runner_id: 0 / zero steps / ~3-second death, and the
+# self-hosted-first job sits in queue indefinitely (timeout-minutes
+# does not bound queue time). 5 separate experiments have
+# falsified every in-workflow fix: ubuntu-22.04, larger-runner
+# fleet, two-job self-hosted-fallback, sidecar + 1-min timeout,
+# and the doc-only ci/runner-pickup-recovery branch. The most
+# recent run on this exact SHA (4d80ef7) was 27222319216
+# (2026-06-09 16:59:41 UTC, cancelled). The failure is a
+# GitHub-side hosted-runner handoff problem
 # specific to this repo, NOT a code problem. Cross-account evidence
 # (limen and a-i--skills on the same account, same day, same runner
 # pool) shows the pool is healthy for other repos. The image-label
