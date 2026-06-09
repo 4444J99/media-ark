@@ -249,3 +249,50 @@ reference but is not mergeable as-is — the workflow structure
 change (the two-job pattern with the self-hosted-first ordering)
 is a real behavioral change and should only land if the user
 intends to register a self-hosted runner.
+
+## Sidecar + 1-minute-timeout experiment (2026-06-09 17:18 UTC, branch `ci/runner-pickup-queue-bounder`)
+
+Designed a two-workflow pattern:
+- `capture-automation-ci.yml` (the main CI proof; single job on
+  ubuntu-latest; always runs)
+- `runner-pickup-attempt.yml` (a new sidecar workflow; single
+  job on self-hosted; timeout 1 min; tests whether a
+  self-hosted runner can pick up jobs for this repo)
+
+**Hypothesis:** with `timeout-minutes: 1` on the sidecar's
+self-hosted job, the job will fail (or complete) after 1
+minute of queueing, regardless of whether a self-hosted
+runner is registered. This bounds the queue wait.
+
+**Result (falsification):** the sidecar's self-hosted job
+queued for **3+ minutes** with `runner_id: 0` and the
+1-minute `timeout-minutes` did NOT fire. The job sat in
+queue indefinitely, exactly as the prior self-hosted
+experiment (PR #6) showed. The new finding is
+independent confirmation: **`timeout-minutes` does not
+bound queue time for self-hosted jobs with no registered
+runner, even with a small (1-min) timeout value.**
+
+**Net effect of the sidecar design:** the sidecar
+correctly isolates the self-hosted attempt from the main
+CI proof. The two workflows run in parallel; the main
+CI proof (single job on ubuntu-latest) shows up
+independently in the PR rollup. The sidecar is a
+*diagnostic* (does this repo have a self-hosted runner
+registered?) and does not gate anything. Whether to
+land this on main is a design call: the sidecar adds
+visual noise (a separate `runner-pickup-attempt` check
+in the rollup) but cleanly separates the
+self-hosted-attempt question from the main CI proof.
+
+**Total failing CI runs on this repo today: 27+**
+(counting the `capture-automation-ci` runner-pickup
+failures plus the perpetually-queued sidecar runs).
+The runner-pickup issue persists across all known
+in-workflow fixes.
+
+**Final state of the experiment branch:** the workflow
+files are committed and pushed; the experiment
+produced a definitive (negative) result on the
+queue-bounding question. The branch is preserved
+for reference.
