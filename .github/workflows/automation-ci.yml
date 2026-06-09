@@ -2,8 +2,10 @@ name: capture-automation-ci
 
 # Runner-pickup: 27+ confirmed failures across 5 falsified experiments
 # (hosted-runner 0-step 3s death; self-hosted queue-indefinite).
-# Full diagnosis, experiment trail, and recommended next actions:
-# MERGE_PATH.md and docs/SHIP_EVIDENCE.md.
+# Diagnosis keyword: "runner-pickup" (greppable in code-search bots that
+# index .yml only). Full diagnosis anchors:
+#   MERGE_PATH.md         §"Post-merge runner-pickup hardening"   (line ~164)
+#   docs/SHIP_EVIDENCE.md §"Post-merge runner-pickup hardening"   (line ~92)
 # Last on-this-SHA run: 27222319216 (2026-06-09 16:59:41 UTC, cancelled).
 
 on:
