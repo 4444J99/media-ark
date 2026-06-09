@@ -34,6 +34,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest.mock
 import urllib.error
 import urllib.request
@@ -47,6 +48,32 @@ PROCESSOR = (
     / "capture_automation"
     / "process_captures.py"
 )
+
+
+def _walk_forbidden_stats_aug_assign(tree: ast.AST) -> list[tuple[int, str]]:
+    """Return (lineno, source) for every ``stats[k] += n`` node.
+
+    Catches: bare augmented assignment on a Subscript whose target
+    ``value`` is a Name with id ``stats``.
+
+    Does NOT catch: ``local = manifest.setdefault('stats', {});
+    local[k] += n`` (F2 Blindspot A) — the LHS is a Name rebind, not
+    a Subscript on a Name called ``stats``. Documented in
+    ``docs/regression-findings.md`` under "F2 — positive control."
+    """
+    offenders: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.AugAssign):
+            continue
+        target = node.target
+        if not isinstance(target, ast.Subscript):
+            continue
+        if not isinstance(target.value, ast.Name):
+            continue
+        if target.value.id != "stats":
+            continue
+        offenders.append((node.lineno, ast.unparse(node)))
+    return offenders
 
 
 def _free_port() -> int:
@@ -429,6 +456,23 @@ class TestReviewFindingsRegression(unittest.TestCase):
                 raise FileNotFoundError("simulated: ocr_temp vanished mid-process")
 
             pc.process_file = raise_other_fnf
+            # F1 binding assertion: the monkeypatch on pc.process_file
+            # must shadow the process_file that run_once resolves.
+            # If a future refactor changes line 2850 from
+            # `process_file(...)` to `pc.process_file(...)` where
+            # `pc` was captured by an inner import, or shadows the
+            # module's process_file with a closure-captured binding,
+            # this assertion fails before run_once is ever called,
+            # turning a silent test pass into a loud test failure.
+            self.assertIs(
+                pc.process_file,
+                pc.run_once.__globals__.get("process_file"),
+                "process_file binding drift: pc.process_file is not "
+                "the process_file the module exposes; run_once will "
+                "not see the monkeypatch. Fix the import pattern in "
+                "process_captures.py or change this test to patch "
+                "run_once.__globals__['process_file'] directly.",
+            )
             try:
                 stats = pc.run_once(
                     source_root=source,
@@ -471,15 +515,7 @@ class TestReviewFindingsRegression(unittest.TestCase):
             self.assertNotIn("source_missing", errors[0]["error"])
 
     def test_4b_run_once_source_missing_lands_in_skipped(self) -> None:
-        """S2 converse of test_4: a FileNotFoundError whose message
-        contains 'source_missing' must land in run_stats['skipped']
-        and produce manifest.errors[0]['error'] == 'source_missing'.
-
-        This pins the positive side of the narrowing contract; without
-        it, the negative-only test_4 would let a future agent delete
-        the 'if "source_missing" not in str(exc)' check entirely and
-        every FNE would land in 'failed' — the test would still pass.
-        """
+        """S2 converse of test_4. See docs/regression-findings.md §S2."""
         from src.capture_automation import process_captures as pc
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -506,6 +542,14 @@ class TestReviewFindingsRegression(unittest.TestCase):
                 )
 
             pc.process_file = raise_source_missing_fnf
+            # F1 binding assertion: see note in test_4. The same
+            # monkeypatch trap applies here; the assertion fails
+            # before run_once is called if the binding has drifted.
+            self.assertIs(
+                pc.process_file,
+                pc.run_once.__globals__.get("process_file"),
+                "process_file binding drift in test_4b; see test_4.",
+            )
             try:
                 stats = pc.run_once(
                     source_root=source,
@@ -547,32 +591,11 @@ class TestReviewFindingsRegression(unittest.TestCase):
             self.assertEqual(errors[0]["error"], "source_missing", errors)
 
     def test_s1_no_unguarded_persistent_stats_aug_assign(self) -> None:
-        """S1 invariant: the persistent ``manifest.setdefault('stats', {})``
-        surface must not be mutated with a bare augmented-assign
-        (``stats[k] += n``) anywhere in process_captures.py. The
-        setdefault returns ``{}`` on a fresh manifest, so ``+=``
-        would KeyError on first run before processing a single file.
-
-        The fix in PR #8 used ``stats.get(k, 0) + n`` for the same
-        reason. This test pins the invariant so a future contribution
-        cannot reintroduce the same class of bug. ``run_stats`` (a
-        fresh dict built per call) is exempt.
-        """
+        """S1 invariant. See docs/regression-findings.md §S1."""
         source = PROCESSOR.read_text()
         tree = ast.parse(source)
 
-        offenders: list[tuple[int, str]] = []
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.AugAssign):
-                continue
-            target = node.target
-            if not isinstance(target, ast.Subscript):
-                continue
-            if not isinstance(target.value, ast.Name):
-                continue
-            if target.value.id != "stats":
-                continue
-            offenders.append((node.lineno, ast.unparse(node)))
+        offenders = _walk_forbidden_stats_aug_assign(tree)
 
         self.assertEqual(
             offenders,
@@ -585,6 +608,53 @@ class TestReviewFindingsRegression(unittest.TestCase):
                 "run_stats (per-call fresh dict) is the only safe "
                 "target. Offending lines: " + repr(offenders)
             ),
+        )
+
+    def test_s1b_walker_catches_forbidden_pattern(self) -> None:
+        """F2 positive control. See docs/regression-findings.md §S1."""
+        forbidden_src = textwrap.dedent(
+            """
+            def bump(manifest):
+                stats = manifest.setdefault("stats", {})
+                stats["files_seen_total"] += 1
+            """
+        )
+        tree = ast.parse(forbidden_src)
+        offenders = _walk_forbidden_stats_aug_assign(tree)
+        self.assertEqual(
+            len(offenders), 1, f"walker missed forbidden pattern: {offenders}"
+        )
+
+        safe_src = textwrap.dedent(
+            """
+            def bump(run_stats):
+                run_stats["files_seen_total"] += 1
+            """
+        )
+        tree = ast.parse(safe_src)
+        offenders = _walk_forbidden_stats_aug_assign(tree)
+        self.assertEqual(
+            offenders, [], f"walker false-positive on per-call surface: {offenders}"
+        )
+
+        unrelated_src = textwrap.dedent(
+            """
+            def bump(manifest):
+                bucket = manifest.setdefault("stats", {})
+                local = bucket
+                local["k"] = local.get("k", 0) + 1
+            """
+        )
+        tree = ast.parse(unrelated_src)
+        offenders = _walk_forbidden_stats_aug_assign(tree)
+        self.assertEqual(
+            offenders,
+            [],
+            f"walker over-flagged safe rewrite: {offenders}. "
+            "Note: this rewrite is the F2 Blindspot A case the "
+            "premortem surfaced. It is *not* caught by the current "
+            "walker; the docs/regression-findings.md file documents "
+            "this limit and points at the manual-review path.",
         )
 
 
