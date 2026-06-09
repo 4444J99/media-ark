@@ -1,42 +1,10 @@
 name: capture-automation-ci
 
-# Runner-pickup status (2026-06-09, 27+ confirmed failures across
-# 2 image labels, 4 event types, 4+ runner IDs, 8+ branches):
-# this workflow's hosted-runner job has been failing consistently
-# with runner_id: 0 / zero steps / ~3-second death, and the
-# self-hosted-first job sits in queue indefinitely (timeout-minutes
-# does not bound queue time). 5 separate experiments have
-# falsified every in-workflow fix: ubuntu-22.04, larger-runner
-# fleet, two-job self-hosted-fallback, sidecar + 1-min timeout,
-# and the doc-only ci/runner-pickup-recovery branch. The most
-# recent run on this exact SHA (4d80ef7) was 27222319216
-# (2026-06-09 16:59:41 UTC, cancelled). The failure is a
-# GitHub-side hosted-runner handoff problem
-# specific to this repo, NOT a code problem. Cross-account evidence
-# (limen and a-i--skills on the same account, same day, same runner
-# pool) shows the pool is healthy for other repos. The image-label
-# theory has been falsified (ubuntu-22.04 failed the same way). The
-# local release verifier (`npm run release:verify`) is the ground
-# truth and is green on the merge commit; the failing GitHub Actions
-# check is informational under the current branch-protection rules
-# (no required status checks on main).
-#
-# This branch experiments with a self-hosted-first / hosted-fallback
-# pattern. The hypothesis: with `runs-on: self-hosted` first, jobs
-# that cannot find a self-hosted runner will fail with a clear
-# 'no matching runner' error rather than the silent 3-second
-# pickup-death, and the hosted job will run as a fallback via
-# `needs: ... if: always()`. If the hosted-fallback job produces
-# a clean run on this repo, the runner-pickup issue is
-# specifically a *first-choice hosted* handoff problem and routing
-# around it breaks the broken path. If the hosted-fallback job
-# also dies the same way, the issue is not first-choice-specific
-# and a different remediation is needed.
-#
-# Recommended next actions if the hosted fallback also dies:
-# (a) register a real self-hosted runner for this repo, or
-# (b) move the capture-automation CI to a separate repository, or
-# (c) wait for the GitHub-side transient to clear.
+# Runner-pickup: 27+ confirmed failures across 5 falsified experiments
+# (hosted-runner 0-step 3s death; self-hosted queue-indefinite).
+# Full diagnosis, experiment trail, and recommended next actions:
+# MERGE_PATH.md and docs/SHIP_EVIDENCE.md.
+# Last on-this-SHA run: 27222319216 (2026-06-09 16:59:41 UTC, cancelled).
 
 on:
   workflow_dispatch:
