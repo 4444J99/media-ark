@@ -1,0 +1,30 @@
+name: runner-pickup-attempt
+
+# Sidecar workflow: tries a self-hosted runner first. If the
+# self-hosted runner is registered, this workflow succeeds and
+# the main workflow records the result. If no self-hosted runner
+# is registered, the job will sit in queue; the workflow-level
+# timeout-minutes (set to 1) is the experiment: does GitHub
+# Actions time out a queued job, or does it sit forever?
+#
+# This sidecar does NOT run the actual CI proof. The main
+# capture-automation-ci workflow always runs the CI proof on
+# the hosted runner, regardless of this sidecar's outcome.
+# This file exists to test whether the self-hosted-fallback
+# pattern is *viable* on this repo, not to be the gate.
+
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+
+jobs:
+  attempt:
+    name: Self-hosted runner pickup attempt
+    runs-on: self-hosted
+    timeout-minutes: 1
+    steps:
+      - name: Echo self-hosted marker
+        run: |
+          echo "running on self-hosted runner"
+          echo "RUNNER_NAME=${RUNNER_NAME:-unset}"

@@ -1,8 +1,8 @@
 name: capture-automation-ci
 
-# Runner-pickup status (2026-06-08, 25+ confirmed failures today):
+# Runner-pickup status (2026-06-08, 27+ confirmed failures today):
 # this workflow's "CLI smoke" job has been failing consistently with
-# runner_id: 0 / zero steps / ~3-second death across 25+ runs on this
+# runner_id: 0 / zero steps / ~3-second death for 27+ runs on this
 # repo. The failure is a GitHub-side hosted-runner handoff problem
 # specific to this repo, NOT a code problem. Cross-account evidence
 # (limen and a-i--skills on the same account, same day, same runner
@@ -13,21 +13,15 @@ name: capture-automation-ci
 # check is informational under the current branch-protection rules
 # (no required status checks on main).
 #
-# This branch experiments with a self-hosted-first / hosted-fallback
-# pattern. The hypothesis: with `runs-on: self-hosted` first, jobs
-# that cannot find a self-hosted runner will fail with a clear
-# 'no matching runner' error rather than the silent 3-second
-# pickup-death, and the hosted job will run as a fallback via
-# `needs: ... if: always()`. If the hosted-fallback job produces
-# a clean run on this repo, the runner-pickup issue is
-# specifically a *first-choice hosted* handoff problem and routing
-# around it breaks the broken path. If the hosted-fallback job
-# also dies the same way, the issue is not first-choice-specific
-# and a different remediation is needed.
+# Sidecar workflow at .github/workflows/runner-pickup-attempt.yml
+# tests whether a self-hosted runner can be registered for this
+# repo. That sidecar runs independently of this CI proof; the
+# main CI proof (this workflow) always runs on the hosted runner
+# regardless of the sidecar's outcome.
 #
-# Recommended next actions if the hosted fallback also dies:
-# (a) register a real self-hosted runner for this repo, or
-# (b) move the capture-automation CI to a separate repository, or
+# Recommended next actions if a hard green check is needed in the
+# future: (a) register a real self-hosted runner for this repo;
+# (b) move the capture-automation CI to a separate repository; or
 # (c) wait for the GitHub-side transient to clear.
 
 on:
@@ -36,21 +30,8 @@ on:
   pull_request:
 
 jobs:
-  smoke-self-hosted:
-    name: CLI smoke (self-hosted, optional)
-    runs-on: self-hosted
-    continue-on-error: true
-    timeout-minutes: 2
-    steps:
-      - name: Echo self-hosted marker
-        run: |
-          echo "running on self-hosted runner"
-          echo "RUNNER_NAME=${RUNNER_NAME:-unset}"
-
-  smoke-hosted:
+  smoke:
     name: CLI smoke
-    needs: smoke-self-hosted
-    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
