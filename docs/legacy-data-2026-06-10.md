@@ -46,16 +46,18 @@ If you want to migrate the legacy data into the current pipeline:
 
 ```bash
 # 1. Copy the canonical subtrees into the new source layout
-mkdir -p data/captures/raw
-cp -R .media-ark-data-legacy-2026-06-10/image data/captures/raw/
-cp -R .media-ark-data-legacy-2026-06-10/document data/captures/raw/
-cp -R .media-ark-data-legacy-2026-06-10/video data/captures/raw/
+mkdir -p data/captures/raw/image data/captures/raw/document data/captures/raw/video
+cp -R .media-ark-data-legacy-2026-06-10/image/. data/captures/raw/image/
+cp -R .media-ark-data-legacy-2026-06-10/document/. data/captures/raw/document/
+cp -R .media-ark-data-legacy-2026-06-10/video/. data/captures/raw/video/
 
 # 2. Run the engine against the new source path
 npm run media-ark:run
 
 # 3. Inspect the new manifest, then remove the legacy snapshot
-#    (and the data/captures/raw/ copy) when satisfied
+#    and the copied subtrees when satisfied:
+#    rm -rf .media-ark-data-legacy-2026-06-10/
+#    rm -rf data/captures/raw/{image,document,video}
 ```
 
 If you don't want it on disk at all, remove the directory
