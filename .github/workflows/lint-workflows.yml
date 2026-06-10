@@ -1,0 +1,38 @@
+name: lint-workflows
+
+# Validates .github/workflows/*.yml structure on PRs that touch the
+# workflows directory. Closes the F3 structural gap: the prior F3
+# fix in PR #10 strengthened *comment* anchors in automation-ci.yml,
+# but the yml syntax itself was not validated by any CI job. A future
+# PR that breaks the yml (invalid indentation, unknown fields,
+# deprecated actions, etc.) would slip through `npm run release:verify`
+# because that script does not parse .yml.
+#
+# Runs on hosted runners only (no `runs-on: self-hosted`), so it is
+# isolated from the runner-pickup pattern documented in issue #5.
+# actionlint v1.7.7 is pinned via the official Docker image.
+#
+# Local verification: `actionlint .github/workflows/*.yml` (v1.7.12
+# installed via Homebrew on the developer machine). The CI version
+# is 1.7.7, so any 1.7.7+ rule will be enforced; new rules added in
+# 1.7.8+ will not block this PR's CI.
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - '.github/workflows/*.yml'
+
+jobs:
+  lint-workflows:
+    name: actionlint
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run actionlint
+        uses: docker://rhysd/actionlint:1.7.7
+        with:
+          args: -color
