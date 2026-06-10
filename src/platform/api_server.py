@@ -6,12 +6,22 @@ import argparse
 import json
 import mimetypes
 import os
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Dict
 from urllib.parse import parse_qs, urlparse
 
-from .config import (
+# Ensure the `media_ark` brand module is importable when this file is
+# invoked as `python3 -m src.platform.api_server` (the import path is
+# `src.platform.api_server`; the brand module lives at `media_ark`).
+_SRC = Path(__file__).resolve().parents[1]
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+from media_ark import BRAND_SERVER_VERSION, env_key  # noqa: E402
+
+from .config import (  # noqa: E402
     PlatformValidationError,
     coerce_int,
     default_out_dir,
@@ -20,7 +30,7 @@ from .config import (
     validate_choice,
     validate_query,
 )
-from .runtime import load_snapshot, run_capture_action
+from .runtime import load_snapshot, run_capture_action  # noqa: E402
 
 
 MAX_JSON_BODY_BYTES = 1_000_000
@@ -119,7 +129,7 @@ def _write_validation_error(handler: BaseHTTPRequestHandler, message: str) -> No
 
 
 class DashboardRequestHandler(BaseHTTPRequestHandler):
-    server_version = "CapturePlatform/1.0"
+    server_version = BRAND_SERVER_VERSION
 
     def _read_query(self) -> Dict[str, Any]:
         parsed = urlparse(self.path)
@@ -298,7 +308,7 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
         _write_json(self, 200, response)
 
     def log_message(self, fmt: str, *args) -> None:
-        if os.environ.get("CAPTURE_PLATFORM_VERBOSE") == "1":
+        if os.environ.get(env_key("VERBOSE")) == "1":
             super().log_message(fmt, *args)
 
 

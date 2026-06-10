@@ -30,7 +30,9 @@ class TestMcpServer(unittest.TestCase):
             ]
             proc = subprocess.run(
                 [sys.executable, "-m", "src.platform.mcp_server"],
-                input="\n".join(json.dumps(message) for message in messages).encode("utf-8"),
+                input="\n".join(json.dumps(message) for message in messages).encode(
+                    "utf-8"
+                ),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 check=False,
@@ -41,7 +43,7 @@ class TestMcpServer(unittest.TestCase):
         self.assertGreaterEqual(len(lines), 3)
 
         initialize = json.loads(lines[0])
-        self.assertEqual(initialize["result"]["serverInfo"]["name"], "screen-capture-platform")
+        self.assertEqual(initialize["result"]["serverInfo"]["name"], "media-ark")
 
         tools = json.loads(lines[1])
         tool_names = {entry["name"] for entry in tools["result"]["tools"]}
@@ -76,7 +78,9 @@ class TestMcpServer(unittest.TestCase):
         ]
         proc = subprocess.run(
             [sys.executable, "-m", "src.platform.mcp_server"],
-            input="\n".join(json.dumps(message) for message in messages).encode("utf-8"),
+            input="\n".join(json.dumps(message) for message in messages).encode(
+                "utf-8"
+            ),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=False,
@@ -84,7 +88,9 @@ class TestMcpServer(unittest.TestCase):
         )
         self.assertEqual(proc.returncode, 0)
         lines = [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
-        errors = {payload["id"]: payload["error"] for payload in lines if "error" in payload}
+        errors = {
+            payload["id"]: payload["error"] for payload in lines if "error" in payload
+        }
         self.assertEqual(errors[2]["code"], -32602)
         self.assertEqual(errors[3]["code"], -32602)
 
@@ -110,7 +116,9 @@ class TestMcpServer(unittest.TestCase):
             ]
             proc = subprocess.run(
                 [sys.executable, "-m", "src.platform.mcp_server"],
-                input="\n".join(json.dumps(message) for message in messages).encode("utf-8"),
+                input="\n".join(json.dumps(message) for message in messages).encode(
+                    "utf-8"
+                ),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 check=False,

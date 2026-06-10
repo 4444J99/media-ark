@@ -12,15 +12,15 @@ npm run capture:pipeline
 
 Expected evidence:
 
-- `.capture-automation/manifest.json`
-- `.capture-automation/index.jsonl`
-- `.capture-automation/reports/`
+- `.media-ark/manifest.json`
+- `.media-ark/index.jsonl`
+- `.media-ark/reports/`
 - optional event logs from `--event-log`
 
 Verification:
 
 ```bash
-python3 src/capture_automation/process_captures.py data/captures/raw --out .capture-automation --verify --json-report
+python3 src/media_ark/process_captures.py data/captures/raw --out .media-ark --verify --json-report
 ```
 
 ## API
@@ -35,7 +35,7 @@ Run a source check:
 
 ```bash
 curl -sS -H 'content-type: application/json' \
-  -d '{"action":"check-source","source":"data/captures/raw","out":".capture-automation"}' \
+  -d '{"action":"check-source","source":"data/captures/raw","out":".media-ark"}' \
   http://127.0.0.1:8787/api/run
 ```
 
@@ -58,7 +58,7 @@ Send newline-delimited JSON-RPC:
 ```json
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
 {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
-{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"capture_status","arguments":{"source":"data/captures/raw","out":".capture-automation"}}}
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"capture_status","arguments":{"source":"data/captures/raw","out":".media-ark"}}}
 ```
 
 Available tools:
@@ -84,7 +84,7 @@ Use the dashboard to:
 - inspect service health and the latest action response
 - view indexed capture rows
 
-The dashboard uses the same API/MCP runtime boundary. Paths outside `CAPTURE_PLATFORM_ALLOWED_ROOTS` are rejected.
+The dashboard uses the same API/MCP runtime boundary. Paths outside `MEDIA_ARK_ALLOWED_ROOTS` are rejected.
 
 ## Clean Checkout Check
 

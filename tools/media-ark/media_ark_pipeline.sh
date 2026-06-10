@@ -4,38 +4,38 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  capture_automation_pipeline.sh [SOURCE_DIR] [OUT_DIR] [extra process args...]
+  media_ark_pipeline.sh [SOURCE_DIR] [OUT_DIR] [extra process args...]
 
 Description:
-  Run a full capture automation pass (check -> process -> verify) in one command.
+  Run a full media-ark pass (check -> process -> verify) in one command.
   Useful for cron, launchd, or manual full-cycle maintenance windows.
 
 Environment:
-  CAPTURE_PIPELINE_COPY (0/1, default: 0)
-  CAPTURE_PIPELINE_MEDIA_TYPES (default: all)
-  CAPTURE_PIPELINE_MIN_SIZE_BYTES (default: 0)
-  CAPTURE_PIPELINE_MAX_SIZE_BYTES (default: 0)
-  CAPTURE_PIPELINE_MAX_FILES (default: 0)
-  CAPTURE_PIPELINE_NO_OCR (0/1, default: 0)
-  CAPTURE_PIPELINE_NO_THUMBNAILS (0/1, default: 0)
-  CAPTURE_PIPELINE_SELF_HEAL (0/1, default: 1)
-  CAPTURE_PIPELINE_REPAIR_ORPHANS (0/1, default: 1)
-  CAPTURE_PIPELINE_CLEANUP_RAW (0/1, default: 0)
-  CAPTURE_PIPELINE_CLEANUP_RAW_DAYS (default: 30)
-  CAPTURE_PIPELINE_CLEANUP_STATE_DAYS (default: 0)
-  CAPTURE_PIPELINE_CHECK_SOURCE (0/1, default: 1)
-  CAPTURE_PIPELINE_VERIFY (0/1, default: 1)
-  CAPTURE_PIPELINE_EVENT_LOG (default: <out>/pipeline-events.jsonl)
-  CAPTURE_PIPELINE_REPORT_DIR (default: <out>/reports)
-  CAPTURE_PIPELINE_REPORT_BASENAME (default: pipeline)
-  CAPTURE_PIPELINE_RUN_ID (optional)
+  MEDIA_ARK_PIPELINE_COPY (0/1, default: 0)
+  MEDIA_ARK_PIPELINE_MEDIA_TYPES (default: all)
+  MEDIA_ARK_PIPELINE_MIN_SIZE_BYTES (default: 0)
+  MEDIA_ARK_PIPELINE_MAX_SIZE_BYTES (default: 0)
+  MEDIA_ARK_PIPELINE_MAX_FILES (default: 0)
+  MEDIA_ARK_PIPELINE_NO_OCR (0/1, default: 0)
+  MEDIA_ARK_PIPELINE_NO_THUMBNAILS (0/1, default: 0)
+  MEDIA_ARK_PIPELINE_SELF_HEAL (0/1, default: 1)
+  MEDIA_ARK_PIPELINE_REPAIR_ORPHANS (0/1, default: 1)
+  MEDIA_ARK_PIPELINE_CLEANUP_RAW (0/1, default: 0)
+  MEDIA_ARK_PIPELINE_CLEANUP_RAW_DAYS (default: 30)
+  MEDIA_ARK_PIPELINE_CLEANUP_STATE_DAYS (default: 0)
+  MEDIA_ARK_PIPELINE_CHECK_SOURCE (0/1, default: 1)
+  MEDIA_ARK_PIPELINE_VERIFY (0/1, default: 1)
+  MEDIA_ARK_PIPELINE_EVENT_LOG (default: <out>/pipeline-events.jsonl)
+  MEDIA_ARK_PIPELINE_REPORT_DIR (default: <out>/reports)
+  MEDIA_ARK_PIPELINE_REPORT_BASENAME (default: pipeline)
+  MEDIA_ARK_PIPELINE_RUN_ID (optional)
 
 Examples:
-  CAPTURE_PIPELINE_COPY=1 CAPTURE_PIPELINE_SELF_HEAL=1 \
-    ./tools/capture-automation/capture_automation_pipeline.sh <repo-root> ./.capture-automation
+  MEDIA_ARK_PIPELINE_COPY=1 MEDIA_ARK_PIPELINE_SELF_HEAL=1 \
+    ./tools/media-ark/media_ark_pipeline.sh <repo-root> ./.media-ark
 
-  ./tools/capture-automation/capture_automation_pipeline.sh <repo-root> ./.capture-automation \
-    --post-hook '/usr/local/bin/python3 src/capture_automation/enrich_one.py'
+  ./tools/media-ark/media_ark_pipeline.sh <repo-root> ./.media-ark \
+    --post-hook '/usr/local/bin/python3 src/media_ark/enrich_one.py'
 USAGE
 }
 
@@ -51,7 +51,7 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-PROCESS_SCRIPT="${REPO_ROOT}/src/capture_automation/process_captures.py"
+PROCESS_SCRIPT="${REPO_ROOT}/src/media_ark/process_captures.py"
 if [[ ! -f "$PROCESS_SCRIPT" ]]; then
   echo "Missing processor: $PROCESS_SCRIPT" >&2
   exit 1
@@ -67,42 +67,42 @@ if [[ ! -d "$SOURCE_DIR" ]]; then
   exit 1
 fi
 
-OUT_DIR=".capture-automation"
+OUT_DIR=".media-ark"
 if [[ "$#" -ge 1 && "${1:0:1}" != "-" ]]; then
   OUT_DIR="$1"
   shift || true
 fi
 mkdir -p "$OUT_DIR"
 
-if [[ "${CAPTURE_PIPELINE_COPY:-0}" == "1" ]]; then
+if [[ "${MEDIA_ARK_PIPELINE_COPY:-0}" == "1" ]]; then
   COPY_FLAG=(--copy)
 else
   COPY_FLAG=()
 fi
 
-MEDIA_TYPES="${CAPTURE_PIPELINE_MEDIA_TYPES:-all}"
-MIN_SIZE_BYTES="${CAPTURE_PIPELINE_MIN_SIZE_BYTES:-0}"
-MAX_SIZE_BYTES="${CAPTURE_PIPELINE_MAX_SIZE_BYTES:-0}"
-MAX_FILES="${CAPTURE_PIPELINE_MAX_FILES:-0}"
-CLEANUP_RAW="${CAPTURE_PIPELINE_CLEANUP_RAW:-0}"
-CLEANUP_RAW_DAYS="${CAPTURE_PIPELINE_CLEANUP_RAW_DAYS:-30}"
-CLEANUP_STATE_DAYS="${CAPTURE_PIPELINE_CLEANUP_STATE_DAYS:-0}"
-CHECK_SOURCE="${CAPTURE_PIPELINE_CHECK_SOURCE:-1}"
-VERIFY="${CAPTURE_PIPELINE_VERIFY:-1}"
-SELF_HEAL="${CAPTURE_PIPELINE_SELF_HEAL:-1}"
-REPAIR_ORPHANS="${CAPTURE_PIPELINE_REPAIR_ORPHANS:-1}"
-EVENT_LOG="${CAPTURE_PIPELINE_EVENT_LOG:-$OUT_DIR/pipeline-events.jsonl}"
-REPORT_DIR="${CAPTURE_PIPELINE_REPORT_DIR:-$OUT_DIR/reports}"
-REPORT_BASENAME="${CAPTURE_PIPELINE_REPORT_BASENAME:-pipeline}"
-RUN_ID="${CAPTURE_PIPELINE_RUN_ID:-pipeline-$(date -u +%Y%m%dT%H%M%SZ)}"
+MEDIA_TYPES="${MEDIA_ARK_PIPELINE_MEDIA_TYPES:-all}"
+MIN_SIZE_BYTES="${MEDIA_ARK_PIPELINE_MIN_SIZE_BYTES:-0}"
+MAX_SIZE_BYTES="${MEDIA_ARK_PIPELINE_MAX_SIZE_BYTES:-0}"
+MAX_FILES="${MEDIA_ARK_PIPELINE_MAX_FILES:-0}"
+CLEANUP_RAW="${MEDIA_ARK_PIPELINE_CLEANUP_RAW:-0}"
+CLEANUP_RAW_DAYS="${MEDIA_ARK_PIPELINE_CLEANUP_RAW_DAYS:-30}"
+CLEANUP_STATE_DAYS="${MEDIA_ARK_PIPELINE_CLEANUP_STATE_DAYS:-0}"
+CHECK_SOURCE="${MEDIA_ARK_PIPELINE_CHECK_SOURCE:-1}"
+VERIFY="${MEDIA_ARK_PIPELINE_VERIFY:-1}"
+SELF_HEAL="${MEDIA_ARK_PIPELINE_SELF_HEAL:-1}"
+REPAIR_ORPHANS="${MEDIA_ARK_PIPELINE_REPAIR_ORPHANS:-1}"
+EVENT_LOG="${MEDIA_ARK_PIPELINE_EVENT_LOG:-$OUT_DIR/pipeline-events.jsonl}"
+REPORT_DIR="${MEDIA_ARK_PIPELINE_REPORT_DIR:-$OUT_DIR/reports}"
+REPORT_BASENAME="${MEDIA_ARK_PIPELINE_REPORT_BASENAME:-pipeline}"
+RUN_ID="${MEDIA_ARK_PIPELINE_RUN_ID:-pipeline-$(date -u +%Y%m%dT%H%M%SZ)}"
 
-if [[ "${CAPTURE_PIPELINE_NO_OCR:-0}" == "1" ]]; then
+if [[ "${MEDIA_ARK_PIPELINE_NO_OCR:-0}" == "1" ]]; then
   NO_OCR=(--no-ocr)
 else
   NO_OCR=()
 fi
 
-if [[ "${CAPTURE_PIPELINE_NO_THUMBNAILS:-0}" == "1" ]]; then
+if [[ "${MEDIA_ARK_PIPELINE_NO_THUMBNAILS:-0}" == "1" ]]; then
   NO_THUMBNAILS=(--no-thumbnails)
 else
   NO_THUMBNAILS=()
@@ -136,7 +136,7 @@ report_step() {
   local step="$1"
   local file="$2"
   mkdir -p "$(dirname "$file")"
-  cat > "$file" <<EOF
+  cat >"$file" <<EOF
 {"step":"$step","source":"$SOURCE_DIR","out":"$OUT_DIR","time":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","status":"starting"}
 EOF
 }
@@ -187,4 +187,4 @@ if [[ "$VERIFY" == "1" ]]; then
     "$@"
 fi
 
-echo "Pipeline complete. Reports in $REPORT_DIR, event log at $EVENT_LOG"
+echo "media-ark pipeline complete. Reports in $REPORT_DIR, event log at $EVENT_LOG"

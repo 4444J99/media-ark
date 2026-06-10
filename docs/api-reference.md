@@ -22,9 +22,9 @@
 
 ### Common workflow entrypoints
 
-- `./tools/capture-automation/run_capture_automation.sh`
-- `./tools/capture-automation/capture_watch_service.sh`
-- `./tools/capture-automation/capture_automation_pipeline.sh`
+- `./tools/media-ark/run_media_ark.sh`
+- `./tools/media-ark/media_ark_watch.sh`
+- `./tools/media-ark/media_ark_pipeline.sh`
 
 ## Platform API (HTTP)
 
@@ -47,7 +47,7 @@ python3 -m src.platform.api_server --host 127.0.0.1 --port 8787
 API and MCP paths are accepted only under configured allowed roots.
 
 - Default allowed roots: the repository root and the OS temporary directory.
-- Override with `CAPTURE_PLATFORM_ALLOWED_ROOTS`, using the platform path separator (`:` on macOS/Linux).
+- Override with `MEDIA_ARK_ALLOWED_ROOTS`, using the platform path separator (`:` on macOS/Linux).
 - `source` and `out` are normalized with symlinks resolved before checks run.
 - Requests outside allowed roots return `validation_error` before the engine starts.
 - JSON request bodies are capped at 1 MB.
@@ -56,7 +56,7 @@ API and MCP paths are accepted only under configured allowed roots.
 Example:
 
 ```bash
-CAPTURE_PLATFORM_ALLOWED_ROOTS="/srv/captures:/srv/capture-state" npm run platform:start
+MEDIA_ARK_ALLOWED_ROOTS="/srv/captures:/srv/capture-state" npm run platform:start
 ```
 
 ### Observability
@@ -103,7 +103,7 @@ Example:
 {
   "action": "process",
   "source": "data/captures/raw",
-  "out": ".capture-automation",
+  "out": ".media-ark",
   "copy": true,
   "max_files": 50
 }

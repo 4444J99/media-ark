@@ -5,7 +5,37 @@ All notable changes to this project are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/) and uses
 [Semantic Versioning](https://semver.org/) ideas.
 
-## [Unreleased]
+## [Unreleased] — Renamed to Media Ark
+
+### Changed
+- **Product name: `screen-capture-automation` → `media-ark`** (display: "Media Ark"). Domain: `media-ark.org` (registered 2026-06-10 via Cloudflare). GitHub repo: `4444J99/media-ark` (rename pending post-PR-#13).
+- Python package: `src/capture_automation/` → `src/media_ark/`.
+- Operational wrappers: `tools/capture-automation/` → `tools/media-ark/` (and 4 scripts renamed: `run_media_ark.sh`, `media_ark_watch.sh`, `media_ark_pipeline.sh`, `start_media_ark.sh`).
+- Default data directory: `.capture-automation/` → `.media-ark/`.
+- Env-var prefix: `CAPTURE_PLATFORM_*` → `MEDIA_ARK_*` (no shim; this is a breaking change for any external consumer of those env vars).
+- HTTP `Server:` response header: `CapturePlatform/1.0` → `MediaArk/1.0`.
+- MCP `serverInfo.name`: `screen-capture-platform` → `media-ark`.
+- npm package name: `screen-capture-automation` → `media-ark`.
+- npm scripts: `capture:*` → `media-ark:*` (the `platform:*` scripts are unchanged).
+- Web UI default `--out` value: `.capture-automation` → `.media-ark`.
+- `.gitignore` rule: `.capture-automation/` → `.media-ark/`.
+- Workflow `automation-ci.yml` paths updated; workflow `name: capture-automation-ci` **kept** for runner-pickup continuity (issue #5).
+
+### Added
+- **`pyproject.toml`**: Python project metadata; `[project] name = "media-ark"`, `[project.urls] Homepage = "https://media-ark.org"`, `[project.scripts] media-ark = "media_ark.process_captures:main"`, etc. Canonical Python project metadata surface.
+- **`src/media_ark/__init__.py` brand module**: single source of truth for the product's identity. Exports `BRAND_NAME`, `BRAND_DISPLAY`, `BRAND_DOMAIN`, `BRAND_REPO_URL`, `BRAND_DATA_DIR`, `BRAND_NPM`, `BRAND_PYTHON_PKG`, `BRAND_ENV_PREFIX`, `BRAND_MCP_NAME`, `BRAND_SERVER_VERSION`, and `env_key(suffix)`. The product's identity strings are now *data*, not strings baked into source. Renaming the product is a one-file change.
+- `src/platform/config.py` reads `BRAND_DATA_DIR` and `BRAND_ENV_PREFIX` from the brand module; env-var names are derived via `env_key("SOURCE")` etc.
+- `src/platform/api_server.py` reads `BRAND_SERVER_VERSION`; `MEDIA_ARK_VERBOSE` env var (was `CAPTURE_PLATFORM_VERBOSE`).
+- `src/platform/mcp_server.py` reads `BRAND_MCP_NAME`.
+- `tools/media-ark/verify_release.py` reads `BRAND_PYTHON_PKG`, `BRAND_DATA_DIR`, and `env_key(...)` from the brand module.
+- README h1 updated to "Media Ark"; storage-model section documents the brand module.
+
+### Not changed
+- Workflow name `capture-automation-ci` (runner-pickup continuity).
+- MCP tool names `capture_status`, `capture_check`, `capture_run`, `capture_verify`, `capture_query` (API contract; renaming these would break MCP clients).
+- The 12 prior closeout files in `~/.Codex/plans/` (historical record; references the old repo URL by design).
+
+## [0.1.0] — 2026-06-09 (renamed entry)
 
 ### Added
 - Initial repo curation pass: minimal root, `src/`, `tools/`, `docs/`, `.config/` layout.

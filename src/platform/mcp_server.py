@@ -8,9 +8,20 @@ import sys
 from typing import Any, Dict, Optional
 from pathlib import Path
 
-from .runtime import run_capture_action
-from .runtime import load_snapshot
-from .config import (
+# Ensure the `media_ark` brand module is importable when this file is
+# invoked as `python3 -m src.platform.mcp_server` (the import path is
+# `src.platform.mcp_server`; the brand module lives at `media_ark`).
+# The relative import from `.config` works because the package context
+# is set by runpy, but the brand module is at the top of `src/`.
+_SRC = Path(__file__).resolve().parents[1]
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+from media_ark import BRAND_MCP_NAME  # noqa: E402
+
+from .runtime import run_capture_action  # noqa: E402
+from .runtime import load_snapshot  # noqa: E402
+from .config import (  # noqa: E402
     PlatformValidationError,
     default_out_dir,
     default_source_dir,
@@ -196,7 +207,7 @@ def _handle_message(message: Dict[str, Any]) -> None:
                 {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {"tools": {"listChanged": False}},
-                    "serverInfo": {"name": "screen-capture-platform", "version": "1.0"},
+                    "serverInfo": {"name": BRAND_MCP_NAME, "version": "1.0"},
                 },
             ),
         )

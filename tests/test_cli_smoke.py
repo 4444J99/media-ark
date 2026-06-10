@@ -21,7 +21,7 @@ def _free_port() -> int:
 class TestCliSmoke(unittest.TestCase):
     def test_cli_help(self) -> None:
         proc = subprocess.run(
-            ["python3", "src/capture_automation/process_captures.py", "--help"],
+            ["python3", "src/media_ark/process_captures.py", "--help"],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             check=False,
@@ -34,10 +34,10 @@ class TestCliSmoke(unittest.TestCase):
         proc = subprocess.run(
             [
                 "python3",
-                "src/capture_automation/process_captures.py",
+                "src/media_ark/process_captures.py",
                 "/tmp",
                 "--out",
-                "/tmp/.capture-automation",
+                "/tmp/.media-ark",
                 "--dry-run",
                 "--json-report",
                 "--max-files",
@@ -62,7 +62,7 @@ class TestCliSmoke(unittest.TestCase):
             source.mkdir()
             proc = subprocess.run(
                 [
-                    "./tools/capture-automation/run_capture_automation.sh",
+                    "./tools/media-ark/run_media_ark.sh",
                     str(source),
                     str(out),
                     "--dry-run",
@@ -75,7 +75,9 @@ class TestCliSmoke(unittest.TestCase):
                 check=False,
             )
 
-        self.assertEqual(proc.returncode, 0, proc.stderr.decode("utf-8", errors="ignore"))
+        self.assertEqual(
+            proc.returncode, 0, proc.stderr.decode("utf-8", errors="ignore")
+        )
         payload = json.loads(proc.stdout.decode("utf-8").splitlines()[-1])
         self.assertEqual(payload["mode"], "once")
 
@@ -86,7 +88,7 @@ class TestCliSmoke(unittest.TestCase):
             source.mkdir()
             proc = subprocess.run(
                 [
-                    "./tools/capture-automation/capture_automation_pipeline.sh",
+                    "./tools/media-ark/media_ark_pipeline.sh",
                     str(source),
                     str(out),
                     "--no-ocr",
@@ -97,8 +99,12 @@ class TestCliSmoke(unittest.TestCase):
                 check=False,
             )
 
-        self.assertEqual(proc.returncode, 0, proc.stderr.decode("utf-8", errors="ignore"))
-        self.assertIn("Pipeline complete", proc.stdout.decode("utf-8", errors="ignore"))
+        self.assertEqual(
+            proc.returncode, 0, proc.stderr.decode("utf-8", errors="ignore")
+        )
+        self.assertIn(
+            "media-ark pipeline complete", proc.stdout.decode("utf-8", errors="ignore")
+        )
 
     def test_capture_watch_wrapper_resolves_processor(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -108,14 +114,14 @@ class TestCliSmoke(unittest.TestCase):
             env = os.environ.copy()
             env.update(
                 {
-                    "CAPTURE_MAX_RUNS": "1",
-                    "CAPTURE_WATCH_INTERVAL": "1",
-                    "CAPTURE_SELF_HEAL": "0",
+                    "MEDIA_ARK_MAX_RUNS": "1",
+                    "MEDIA_ARK_WATCH_INTERVAL": "1",
+                    "MEDIA_ARK_SELF_HEAL": "0",
                 }
             )
             proc = subprocess.run(
                 [
-                    "./tools/capture-automation/capture_watch_service.sh",
+                    "./tools/media-ark/media_ark_watch.sh",
                     str(source),
                     str(out),
                     "--no-ocr",
@@ -128,7 +134,9 @@ class TestCliSmoke(unittest.TestCase):
                 timeout=20,
             )
 
-        self.assertEqual(proc.returncode, 0, proc.stderr.decode("utf-8", errors="ignore"))
+        self.assertEqual(
+            proc.returncode, 0, proc.stderr.decode("utf-8", errors="ignore")
+        )
 
     def test_platform_start_script_serves_api_and_dashboard(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -137,13 +145,13 @@ class TestCliSmoke(unittest.TestCase):
             env = os.environ.copy()
             env.update(
                 {
-                    "CAPTURE_PLATFORM_PORT": str(port),
-                    "CAPTURE_PLATFORM_SOURCE": str(root / "source"),
-                    "CAPTURE_PLATFORM_OUT": str(root / "out"),
+                    "MEDIA_ARK_PORT": str(port),
+                    "MEDIA_ARK_SOURCE": str(root / "source"),
+                    "MEDIA_ARK_OUT": str(root / "out"),
                 }
             )
             proc = subprocess.Popen(
-                ["./tools/capture-automation/start_capture_platform.sh"],
+                ["./tools/media-ark/start_media_ark.sh"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -156,9 +164,13 @@ class TestCliSmoke(unittest.TestCase):
                 deadline = time.time() + 20
                 while time.time() < deadline:
                     try:
-                        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/status", timeout=1) as response:
+                        with urllib.request.urlopen(
+                            f"http://127.0.0.1:{port}/api/status", timeout=1
+                        ) as response:
                             status_payload = json.loads(response.read().decode("utf-8"))
-                        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=1) as response:
+                        with urllib.request.urlopen(
+                            f"http://127.0.0.1:{port}/", timeout=1
+                        ) as response:
                             page_text = response.read().decode("utf-8")
                         break
                     except Exception:
@@ -168,7 +180,9 @@ class TestCliSmoke(unittest.TestCase):
 
                 if status_payload is None:
                     stdout, stderr = proc.communicate(timeout=5)
-                    self.fail(f"platform start did not become ready\nstdout={stdout}\nstderr={stderr}")
+                    self.fail(
+                        f"platform start did not become ready\nstdout={stdout}\nstderr={stderr}"
+                    )
                 self.assertTrue(status_payload["ok"])
                 self.assertEqual(status_payload["api_version"], "1.0")
                 self.assertIn("Screen Capture Platform", page_text)
@@ -196,7 +210,7 @@ class TestCliSmoke(unittest.TestCase):
             sample.write_bytes(b"sample image bytes")
             base_cmd = [
                 "python3",
-                "src/capture_automation/process_captures.py",
+                "src/media_ark/process_captures.py",
                 str(source),
                 "--out",
                 str(out),
@@ -206,23 +220,35 @@ class TestCliSmoke(unittest.TestCase):
                 "--json-report",
             ]
 
-            first = subprocess.run(base_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+            first = subprocess.run(
+                base_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
+            )
             first_index = (out / "index.jsonl").read_text(encoding="utf-8")
             first_canonical_files = sorted(
                 str(path.relative_to(out))
                 for path in out.rglob("*")
-                if path.is_file() and path.suffix.lower() in {".png", ".jpg", ".jpeg", ".pdf", ".mov", ".mp4"}
+                if path.is_file()
+                and path.suffix.lower()
+                in {".png", ".jpg", ".jpeg", ".pdf", ".mov", ".mp4"}
             )
-            second = subprocess.run(base_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+            second = subprocess.run(
+                base_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
+            )
             second_index = (out / "index.jsonl").read_text(encoding="utf-8")
             second_canonical_files = sorted(
                 str(path.relative_to(out))
                 for path in out.rglob("*")
-                if path.is_file() and path.suffix.lower() in {".png", ".jpg", ".jpeg", ".pdf", ".mov", ".mp4"}
+                if path.is_file()
+                and path.suffix.lower()
+                in {".png", ".jpg", ".jpeg", ".pdf", ".mov", ".mp4"}
             )
 
-        self.assertEqual(first.returncode, 0, first.stderr.decode("utf-8", errors="ignore"))
-        self.assertEqual(second.returncode, 0, second.stderr.decode("utf-8", errors="ignore"))
+        self.assertEqual(
+            first.returncode, 0, first.stderr.decode("utf-8", errors="ignore")
+        )
+        self.assertEqual(
+            second.returncode, 0, second.stderr.decode("utf-8", errors="ignore")
+        )
         first_payload = json.loads(first.stdout.decode("utf-8").splitlines()[-1])
         second_payload = json.loads(second.stdout.decode("utf-8").splitlines()[-1])
         self.assertEqual(first_payload["stats"]["new"], 1)
@@ -241,7 +267,7 @@ class TestCliSmoke(unittest.TestCase):
             sample.write_bytes(b"sample image bytes")
             base_cmd = [
                 "python3",
-                "src/capture_automation/process_captures.py",
+                "src/media_ark/process_captures.py",
                 str(source),
                 "--out",
                 str(out),
@@ -251,8 +277,12 @@ class TestCliSmoke(unittest.TestCase):
                 "--json-report",
             ]
 
-            process = subprocess.run(base_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
-            self.assertEqual(process.returncode, 0, process.stderr.decode("utf-8", errors="ignore"))
+            process = subprocess.run(
+                base_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
+            )
+            self.assertEqual(
+                process.returncode, 0, process.stderr.decode("utf-8", errors="ignore")
+            )
             self.assertTrue((out / "manifest.json").exists())
             self.assertTrue((out / "index.jsonl").exists())
             sidecars = [
@@ -273,7 +303,9 @@ class TestCliSmoke(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(verify_before.returncode, 2)
-            verify_before_payload = json.loads(verify_before.stdout.decode("utf-8").splitlines()[-1])
+            verify_before_payload = json.loads(
+                verify_before.stdout.decode("utf-8").splitlines()[-1]
+            )
             self.assertEqual(verify_before_payload["health"]["sidecar_unindexed"], 1)
 
             repair = subprocess.run(
@@ -282,7 +314,9 @@ class TestCliSmoke(unittest.TestCase):
                 stderr=subprocess.PIPE,
                 check=False,
             )
-            self.assertEqual(repair.returncode, 0, repair.stderr.decode("utf-8", errors="ignore"))
+            self.assertEqual(
+                repair.returncode, 0, repair.stderr.decode("utf-8", errors="ignore")
+            )
             repair_payload = json.loads(repair.stdout.decode("utf-8").splitlines()[-1])
             self.assertEqual(repair_payload["summary"]["recovered_sidecars"], 1)
             self.assertEqual(repair_payload["summary"]["index_rows"], 1)
@@ -293,7 +327,13 @@ class TestCliSmoke(unittest.TestCase):
                 stderr=subprocess.PIPE,
                 check=False,
             )
-            self.assertEqual(verify_after.returncode, 0, verify_after.stderr.decode("utf-8", errors="ignore"))
-            verify_after_payload = json.loads(verify_after.stdout.decode("utf-8").splitlines()[-1])
+            self.assertEqual(
+                verify_after.returncode,
+                0,
+                verify_after.stderr.decode("utf-8", errors="ignore"),
+            )
+            verify_after_payload = json.loads(
+                verify_after.stdout.decode("utf-8").splitlines()[-1]
+            )
             self.assertEqual(verify_after_payload["health"]["status"], "ok")
             self.assertEqual(verify_after_payload["health"]["index_rows"], 1)

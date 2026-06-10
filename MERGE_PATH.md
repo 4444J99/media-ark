@@ -1,4 +1,4 @@
-# Merge Path: screen-capture--060826
+# Merge Path: media-ark (formerly screen-capture--060826)
 
 This file documents the corrected diagnosis for the failing PR #3 CI runs
 and the exact commands needed to merge the branch once the runner

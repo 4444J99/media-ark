@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Brand: media-ark (Media Ark). Env-var prefix: MEDIA_ARK_*. Default
+# data dir: .media-ark. Python package: media_ark (in src/).
+
 usage() {
   cat <<'USAGE'
 Usage:
-  start_capture_platform.sh [--host HOST] [--port PORT] [--source SOURCE_DIR] [--out OUT_DIR]
+  start_media_ark.sh [--host HOST] [--port PORT] [--source SOURCE_DIR] [--out OUT_DIR]
 
 Description:
   One-command local platform start for the HTTP API and dashboard. The MCP server
@@ -12,23 +15,23 @@ Description:
   handing off to the API/dashboard server.
 
 Environment:
-  CAPTURE_PLATFORM_HOST (default: 127.0.0.1)
-  CAPTURE_PLATFORM_PORT (default: 8787)
-  CAPTURE_PLATFORM_SOURCE (default: data/captures/raw)
-  CAPTURE_PLATFORM_OUT (default: .capture-automation)
-  CAPTURE_PLATFORM_MCP_PREFLIGHT (0/1, default: 1)
+  MEDIA_ARK_HOST (default: 127.0.0.1)
+  MEDIA_ARK_PORT (default: 8787)
+  MEDIA_ARK_SOURCE (default: data/captures/raw)
+  MEDIA_ARK_OUT (default: .media-ark)
+  MEDIA_ARK_MCP_PREFLIGHT (0/1, default: 1)
 
 Examples:
-  ./tools/capture-automation/start_capture_platform.sh
-  CAPTURE_PLATFORM_PORT=8790 npm run platform:start
+  ./tools/media-ark/start_media_ark.sh
+  MEDIA_ARK_PORT=8790 npm run platform:start
 USAGE
 }
 
-HOST="${CAPTURE_PLATFORM_HOST:-127.0.0.1}"
-PORT="${CAPTURE_PLATFORM_PORT:-8787}"
-SOURCE_DIR="${CAPTURE_PLATFORM_SOURCE:-data/captures/raw}"
-OUT_DIR="${CAPTURE_PLATFORM_OUT:-.capture-automation}"
-MCP_PREFLIGHT="${CAPTURE_PLATFORM_MCP_PREFLIGHT:-1}"
+HOST="${MEDIA_ARK_HOST:-127.0.0.1}"
+PORT="${MEDIA_ARK_PORT:-8787}"
+SOURCE_DIR="${MEDIA_ARK_SOURCE:-data/captures/raw}"
+OUT_DIR="${MEDIA_ARK_OUT:-.media-ark}"
+MCP_PREFLIGHT="${MEDIA_ARK_MCP_PREFLIGHT:-1}"
 
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
@@ -118,10 +121,10 @@ if missing:
 PY
 fi
 
-echo "Capture platform API/dashboard: http://${HOST}:${PORT}/"
+echo "media-ark platform API/dashboard: http://${HOST}:${PORT}/"
 echo "MCP stdio command: python3 -m src.platform.mcp_server"
-export CAPTURE_PLATFORM_HOST="$HOST"
-export CAPTURE_PLATFORM_PORT="$PORT"
-export CAPTURE_PLATFORM_SOURCE="$SOURCE_DIR"
-export CAPTURE_PLATFORM_OUT="$OUT_DIR"
+export MEDIA_ARK_HOST="$HOST"
+export MEDIA_ARK_PORT="$PORT"
+export MEDIA_ARK_SOURCE="$SOURCE_DIR"
+export MEDIA_ARK_OUT="$OUT_DIR"
 exec python3 -m src.platform.api_server --host "$HOST" --port "$PORT"

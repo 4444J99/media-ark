@@ -43,10 +43,7 @@ import unittest
 
 
 PROCESSOR = (
-    Path(__file__).resolve().parents[1]
-    / "src"
-    / "capture_automation"
-    / "process_captures.py"
+    Path(__file__).resolve().parents[1] / "src" / "media_ark" / "process_captures.py"
 )
 
 
@@ -259,14 +256,14 @@ class TestReviewFindingsRegression(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
-            os.environ["CAPTURE_PLATFORM_SOURCE"] = str(tmp / "src")
-            os.environ["CAPTURE_PLATFORM_OUT"] = str(tmp / "out")
+            os.environ["MEDIA_ARK_SOURCE"] = str(tmp / "src")
+            os.environ["MEDIA_ARK_OUT"] = str(tmp / "out")
             try:
                 self.assertEqual(config.default_source_dir(), (tmp / "src").resolve())
                 self.assertEqual(config.default_out_dir(), (tmp / "out").resolve())
             finally:
-                del os.environ["CAPTURE_PLATFORM_SOURCE"]
-                del os.environ["CAPTURE_PLATFORM_OUT"]
+                del os.environ["MEDIA_ARK_SOURCE"]
+                del os.environ["MEDIA_ARK_OUT"]
 
     def test_9_malformed_sidecar_does_not_break_repair(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -292,7 +289,7 @@ class TestReviewFindingsRegression(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            from src.capture_automation.process_captures import load_sidecar_records
+            from src.media_ark.process_captures import load_sidecar_records
 
             records, skipped = load_sidecar_records(out)
             self.assertEqual(skipped, 0, records)
@@ -325,7 +322,7 @@ class TestReviewFindingsRegression(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            from src.capture_automation.process_captures import (
+            from src.media_ark.process_captures import (
                 iter_sidecar_paths,
                 load_sidecar_records,
             )
@@ -339,7 +336,7 @@ class TestReviewFindingsRegression(unittest.TestCase):
             real_mtime = sample.stat().st_mtime_ns
             self.assertGreater(real_mtime, 0)
 
-            from src.capture_automation.process_captures import should_skip_source_file
+            from src.media_ark.process_captures import should_skip_source_file
 
             source_index = {
                 str(sample): {
@@ -380,7 +377,7 @@ class TestReviewFindingsRegression(unittest.TestCase):
         """Direct unit test: process_file raises FileNotFoundError, and the
         run_once outer catch narrows to FileNotFoundError, not the broad OSError.
         """
-        from src.capture_automation.process_captures import process_file
+        from src.media_ark.process_captures import process_file
 
         manifest: dict = {
             "processed": {},
@@ -432,7 +429,7 @@ class TestReviewFindingsRegression(unittest.TestCase):
         monkeypatch silently no-ops and this test loses coverage.
         See S3 in the 2026-06-09 triadic review.
         """
-        from src.capture_automation import process_captures as pc
+        from src.media_ark import process_captures as pc
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
@@ -516,7 +513,7 @@ class TestReviewFindingsRegression(unittest.TestCase):
 
     def test_4b_run_once_source_missing_lands_in_skipped(self) -> None:
         """S2 converse of test_4. See docs/regression-findings.md §S2."""
-        from src.capture_automation import process_captures as pc
+        from src.media_ark import process_captures as pc
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
