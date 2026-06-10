@@ -31,3 +31,9 @@ coverage/
 data/captures/raw/
 data/captures/raw/
 *.egg-info/
+
+# Legacy capture snapshot from the pre-rename workspace
+# (screen-capture--060826). 771MB / 548 files, not part of the
+# runtime data model. Preserved on disk for reference, excluded
+# from version control. See docs/legacy-data-2026-06-10.md.
+.media-ark-data-legacy-2026-06-10/

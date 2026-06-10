@@ -122,3 +122,29 @@ and is green on the merge commit. See
 `.github/workflows/automation-ci.yml` for the full diagnostic trail
 and the next-step options (self-hosted runner registration, repo
 split, or wait for the GitHub-side transient to clear).
+
+## Re-verification on 2026-06-10 (post-rename, post-PR-#13)
+
+The local release verifier was re-run on 2026-06-10 against
+commit `1e89e5b` (the `Media Ark` rename + brand module) on
+`main`. The verifier exited `ok: true` and exercised all five
+gates (unit/platform suite, deterministic engine + sidecar
+recovery, one-command API/dashboard startup, MCP contract +
+telemetry, docs + release artifacts). The runtime data
+directory (`.media-ark/`) was instantiated with 4 source PNGs
+from `data/captures/raw/` and the engine produced
+`New=4 duplicates=0 errors=0`.
+
+The runner-pickup GitHub-Actions issue is **unchanged** as of
+2026-06-10 14:59 UTC. The `capture-automation-ci` workflow on
+`main` continues to fail at the hosted-runner pickup step
+(`runner_id: 0`, zero steps, ~3 s). The branch-protection
+rules do **not** require this check, so human push/merge is
+unaffected. The local `npm run release:verify` is the
+authoritative acceptance gate.
+
+The legacy data directory `.media-ark-data-legacy-2026-06-10/`
+(pre-rename snapshot, 771 MB / 548 files) is now excluded via
+`.gitignore` and documented in `docs/legacy-data-2026-06-10.md`.
+The repository metadata on GitHub (`description`, `homepageUrl`,
+`topics`) was updated to reflect the Media Ark brand.
