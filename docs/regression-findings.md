@@ -29,7 +29,7 @@ so the test bodies could be skimmed for patterns, not read for prose.
   module level in the test file. Both S1 tests call it.
 
 - **What it pins:** No `AugAssign` on a `Subscript` whose `value` is a
-  `Name` with id `stats` may exist in `src/capture_automation/process_captures.py`
+  `Name` with id `stats` may exist in `src/media_ark/process_captures.py`
   on the persistent manifest surface. The per-call `run_stats` dict
   is permitted to use `+=` because it is freshly constructed in
   `run_once`.
@@ -98,7 +98,7 @@ so the test bodies could be skimmed for patterns, not read for prose.
 - **Tests:** `test_4`, `test_4b`
 - **What it documents:** Both tests monkeypatch `pc.process_file`.
   The monkeypatch works because `process_file` is defined at
-  `src/capture_automation/process_captures.py:935` and `run_once`
+  `src/media_ark/process_captures.py:935` and `run_once`
   is defined at the same file at line 2717. `run_once` calls
   `process_file` by bare name at line 2850, which resolves through
   the module's `__dict__` (i.e., `pc.__dict__['process_file']`).
@@ -189,7 +189,7 @@ imports). This means:
   envs in `tox.ini` are `py311` and `py314` only
   (`envlist = py311, py314` at `tox.ini:32`).
 
-The hardcoded `src/capture_automation/process_captures.py` path in
+The hardcoded `src/media_ark/process_captures.py` path in
 the `PROCESSOR` constant in the test file is the canary the F9
 deep-dive agent pointed at (the agent named the test body, but the
 actual canary is the module-level `PROCESSOR` constant). The path

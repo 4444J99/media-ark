@@ -1,0 +1,55 @@
+[project]
+name = "media-ark"
+version = "0.2.0"
+description = "Local-first media archive pipeline (image, video, PDF, documents)"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [
+  { name = "media-ark contributors" }
+]
+keywords = [
+  "media",
+  "archive",
+  "local-first",
+  "screenshot",
+  "photo",
+  "pdf",
+  "ocr",
+  "deduplication",
+  "cli",
+  "mcp"
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: End Users/Desktop",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Multimedia :: Graphics :: Capture",
+  "Topic :: Utilities"
+]
+
+[project.urls]
+Homepage = "https://media-ark.org"
+Repository = "https://github.com/4444J99/media-ark"
+Issues = "https://github.com/4444J99/media-ark/issues"
+
+[project.scripts]
+media-ark = "media_ark.process_captures:main"
+media-ark-api = "platform.api_server:main"
+media-ark-mcp = "platform.mcp_server:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"media_ark" = ["py.typed"]

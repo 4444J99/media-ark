@@ -1,4 +1,4 @@
-# Screen Capture Automation
+# Media Ark
 
 A local-first capture processing engine for screenshots, PDFs, and videos.
 
@@ -11,9 +11,9 @@ Includes:
 
 Use this project to turn a raw capture folder into a clean, searchable pipeline of canonical artifacts.
 
-Default behavior moves source files into `.capture-automation/` during processing. Use `--copy` if you want to keep originals in `data/captures/raw/`.
+Default behavior moves source files into `.media-ark/` during processing. Use `--copy` if you want to keep originals in `data/captures/raw/`.
 
-API and MCP requests are path-bound by default. `source` and `out` must live under the checkout root or the OS temporary directory unless `CAPTURE_PLATFORM_ALLOWED_ROOTS` is set for a deployment.
+API and MCP requests are path-bound by default. `source` and `out` must live under the checkout root or the OS temporary directory unless `MEDIA_ARK_ALLOWED_ROOTS` is set for a deployment.
 
 API and MCP actions persist event logs and per-run reports under the selected output root by default.
 

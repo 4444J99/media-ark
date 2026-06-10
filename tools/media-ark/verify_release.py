@@ -18,11 +18,16 @@ from typing import Any, Dict, List
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PROCESSOR = REPO_ROOT / "src" / "capture_automation" / "process_captures.py"
+sys.path.insert(0, str(REPO_ROOT / "src"))
+from media_ark import BRAND_DATA_DIR, BRAND_PYTHON_PKG, env_key  # noqa: E402
+
+PROCESSOR = REPO_ROOT / "src" / BRAND_PYTHON_PKG / "process_captures.py"
 MEDIA_SUFFIXES = {".png", ".jpg", ".jpeg", ".pdf", ".mov", ".mp4", ".webm"}
 
 
-def run_cmd(args: List[str], *, timeout: int = 120, env: Dict[str, str] | None = None) -> subprocess.CompletedProcess:
+def run_cmd(
+    args: List[str], *, timeout: int = 120, env: Dict[str, str] | None = None
+) -> subprocess.CompletedProcess:
     proc = subprocess.run(
         args,
         cwd=REPO_ROOT,
@@ -41,7 +46,9 @@ def run_cmd(args: List[str], *, timeout: int = 120, env: Dict[str, str] | None =
 
 
 def last_json(stdout: str) -> Dict[str, Any]:
-    for line in reversed([item.strip() for item in stdout.splitlines() if item.strip()]):
+    for line in reversed(
+        [item.strip() for item in stdout.splitlines() if item.strip()]
+    ):
         try:
             payload = json.loads(line)
         except json.JSONDecodeError:
@@ -65,7 +72,9 @@ def read_json_url(url: str, *, timeout: int = 2) -> Dict[str, Any]:
     return payload
 
 
-def post_json(url: str, payload: Dict[str, Any], *, timeout: int = 10) -> Dict[str, Any]:
+def post_json(
+    url: str, payload: Dict[str, Any], *, timeout: int = 10
+) -> Dict[str, Any]:
     request = urllib.request.Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
@@ -126,7 +135,9 @@ def verify_engine_determinism_and_recovery(tmp_root: Path) -> Dict[str, Any]:
     if second_payload["stats"]["new"] != 0 or second_payload["stats"]["skipped"] != 1:
         raise AssertionError("second engine run was not idempotent")
     if first_index != second_index or first_media != second_media:
-        raise AssertionError("deterministic output changed between identical copy-mode runs")
+        raise AssertionError(
+            "deterministic output changed between identical copy-mode runs"
+        )
 
     for name in ("manifest.json", "index.jsonl", "index-summary.json"):
         target = out / name
@@ -143,7 +154,9 @@ def verify_engine_determinism_and_recovery(tmp_root: Path) -> Dict[str, Any]:
         timeout=60,
     )
     if verify_before.returncode != 2:
-        raise AssertionError("verify before repair did not detect missing manifest/index state")
+        raise AssertionError(
+            "verify before repair did not detect missing manifest/index state"
+        )
 
     repair = run_cmd(base + ["--repair"])
     repair_payload = last_json(repair.stdout)
@@ -203,20 +216,34 @@ def verify_mcp(tmp_root: Path) -> Dict[str, Any]:
     responses = [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
     tools = next(item["result"]["tools"] for item in responses if item.get("id") == 2)
     tool_names = {item["name"] for item in tools}
-    required = {"capture_status", "capture_check", "capture_run", "capture_verify", "capture_query"}
+    required = {
+        "capture_status",
+        "capture_check",
+        "capture_run",
+        "capture_verify",
+        "capture_query",
+    }
     missing = required - tool_names
     if missing:
         raise AssertionError(f"MCP tool list missing: {sorted(missing)}")
 
     check = next(item["result"] for item in responses if item.get("id") == 3)
-    if not check["ok"] or not Path(check["event_log"]).exists() or not Path(check["report"]).exists():
+    if (
+        not check["ok"]
+        or not Path(check["event_log"]).exists()
+        or not Path(check["report"]).exists()
+    ):
         raise AssertionError("MCP capture_check did not persist telemetry")
 
     rejected = next(item for item in responses if item.get("id") == 4)
     if rejected.get("error", {}).get("code") != -32602:
         raise AssertionError("MCP did not reject outside-root paths")
 
-    return {"tools": sorted(tool_names), "event_log": check["event_log"], "report": check["report"]}
+    return {
+        "tools": sorted(tool_names),
+        "event_log": check["event_log"],
+        "report": check["report"],
+    }
 
 
 def verify_platform(tmp_root: Path) -> Dict[str, Any]:
@@ -228,9 +255,9 @@ def verify_platform(tmp_root: Path) -> Dict[str, Any]:
     env = os.environ.copy()
     env.update(
         {
-            "CAPTURE_PLATFORM_SOURCE": str(source),
-            "CAPTURE_PLATFORM_OUT": str(out),
-            "CAPTURE_PLATFORM_PORT": str(port),
+            env_key("SOURCE"): str(source),
+            env_key("OUT"): str(out),
+            env_key("PORT"): str(port),
         }
     )
     proc = subprocess.Popen(
@@ -255,7 +282,9 @@ def verify_platform(tmp_root: Path) -> Dict[str, Any]:
                 time.sleep(0.25)
         if status is None:
             stdout, stderr = proc.communicate(timeout=5)
-            raise AssertionError(f"platform did not start\nstdout={stdout}\nstderr={stderr}")
+            raise AssertionError(
+                f"platform did not start\nstdout={stdout}\nstderr={stderr}"
+            )
         if status.get("ok") is not True:
             raise AssertionError("platform status was not ok")
 
@@ -269,11 +298,17 @@ def verify_platform(tmp_root: Path) -> Dict[str, Any]:
         )
         if run_payload.get("ok") is not True:
             raise AssertionError("API check-source did not succeed")
-        if not Path(run_payload["event_log"]).exists() or not Path(run_payload["report"]).exists():
+        if (
+            not Path(run_payload["event_log"]).exists()
+            or not Path(run_payload["report"]).exists()
+        ):
             raise AssertionError("API run did not persist telemetry")
 
         status_after = read_json_url(f"http://127.0.0.1:{port}/api/status?out={out}")
-        if status_after.get("platform_events_exists") is not True or status_after.get("report_count", 0) < 1:
+        if (
+            status_after.get("platform_events_exists") is not True
+            or status_after.get("report_count", 0) < 1
+        ):
             raise AssertionError("API status did not expose telemetry evidence")
 
         try:
@@ -316,10 +351,19 @@ def verify_docs() -> Dict[str, Any]:
     missing = [path for path in required if not (REPO_ROOT / path).exists()]
     if missing:
         raise AssertionError(f"required docs missing: {missing}")
-    release_text = (REPO_ROOT / "docs" / "RELEASE.md").read_text(encoding="utf-8").lower()
-    if "rollback plan" not in release_text or "verified recovery path" not in release_text:
-        raise AssertionError("release artifact does not document rollback and verified recovery")
-    onboarding = (REPO_ROOT / "docs" / "ONBOARDING.md").read_text(encoding="utf-8").lower()
+    release_text = (
+        (REPO_ROOT / "docs" / "RELEASE.md").read_text(encoding="utf-8").lower()
+    )
+    if (
+        "rollback plan" not in release_text
+        or "verified recovery path" not in release_text
+    ):
+        raise AssertionError(
+            "release artifact does not document rollback and verified recovery"
+        )
+    onboarding = (
+        (REPO_ROOT / "docs" / "ONBOARDING.md").read_text(encoding="utf-8").lower()
+    )
     for surface in ("cli", "api", "mcp", "dashboard"):
         if surface not in onboarding:
             raise AssertionError(f"onboarding missing {surface}")
@@ -335,9 +379,13 @@ def main() -> None:
     run_cmd(["npm", "test"], timeout=180)
     with tempfile.TemporaryDirectory(prefix="capture-release-verify-") as tmpdir:
         tmp_root = Path(tmpdir)
-        print("release verifier: checking deterministic engine and recovery", flush=True)
+        print(
+            "release verifier: checking deterministic engine and recovery", flush=True
+        )
         summary["engine"] = verify_engine_determinism_and_recovery(tmp_root)
-        print("release verifier: checking one-command API/dashboard startup", flush=True)
+        print(
+            "release verifier: checking one-command API/dashboard startup", flush=True
+        )
         summary["platform"] = verify_platform(tmp_root)
         print("release verifier: checking MCP contract and telemetry", flush=True)
         summary["mcp"] = verify_mcp(tmp_root)

@@ -1,6 +1,6 @@
 const state = {
   defaultSource: 'data/captures/raw',
-  defaultOut: '.capture-automation',
+  defaultOut: '.media-ark',
 };
 
 function el(selector) {

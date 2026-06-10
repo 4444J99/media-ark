@@ -2,10 +2,20 @@
 
 import os
 import re
+import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, List, Optional
+
+# Ensure the `media_ark` brand module is importable when this file is
+# imported as `src.platform.config` (the brand module lives at the top
+# of `src/`).
+_SRC = Path(__file__).resolve().parents[1]
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+from media_ark import BRAND_DATA_DIR, BRAND_PYTHON_PKG, env_key  # noqa: E402
 
 
 class PlatformValidationError(ValueError):
@@ -20,23 +30,23 @@ def processor_script() -> Path:
     return (
         Path(__file__).resolve().parents[2]
         / "src"
-        / "capture_automation"
+        / BRAND_PYTHON_PKG
         / "process_captures.py"
     )
 
 
 def default_source_dir() -> Path:
-    raw = os.environ.get("CAPTURE_PLATFORM_SOURCE", "").strip()
+    raw = os.environ.get(env_key("SOURCE"), "").strip()
     if raw:
         return Path(raw).expanduser().resolve()
     return repo_root() / "data" / "captures" / "raw"
 
 
 def default_out_dir() -> Path:
-    raw = os.environ.get("CAPTURE_PLATFORM_OUT", "").strip()
+    raw = os.environ.get(env_key("OUT"), "").strip()
     if raw:
         return Path(raw).expanduser().resolve()
-    return repo_root() / ".capture-automation"
+    return repo_root() / BRAND_DATA_DIR
 
 
 def _dedupe_paths(paths: Iterable[Path]) -> List[Path]:
@@ -53,7 +63,7 @@ def _dedupe_paths(paths: Iterable[Path]) -> List[Path]:
 
 
 def allowed_roots() -> List[Path]:
-    raw = os.environ.get("CAPTURE_PLATFORM_ALLOWED_ROOTS", "").strip()
+    raw = os.environ.get(env_key("ALLOWED_ROOTS"), "").strip()
     if raw:
         configured = [Path(item) for item in raw.split(os.pathsep) if item.strip()]
         return _dedupe_paths(configured)

@@ -15,18 +15,18 @@ The verifier covers unit tests, deterministic engine output, API/dashboard start
 2. Preserve current state before changing anything:
 
 ```bash
-mkdir -p .capture-automation/recovery
-tar -czf ".capture-automation/recovery/state-$(date -u +%Y%m%dT%H%M%SZ).tgz" .capture-automation
+mkdir -p .media-ark/recovery
+tar -czf ".media-ark/recovery/state-$(date -u +%Y%m%dT%H%M%SZ).tgz" .media-ark
 ```
 
 3. Restore the last known-good checkout or release tag.
-4. Keep `.capture-automation/` in place unless the failure is known to be state corruption.
+4. Keep `.media-ark/` in place unless the failure is known to be state corruption.
 5. Run:
 
 ```bash
 npm test
 npm run release:verify
-python3 src/capture_automation/process_captures.py data/captures/raw --out .capture-automation --verify
+python3 src/media_ark/process_captures.py data/captures/raw --out .media-ark --verify
 ```
 
 6. If verification reports missing index or manifest state, run the recovery path below.
@@ -36,8 +36,8 @@ python3 src/capture_automation/process_captures.py data/captures/raw --out .capt
 The repair command rebuilds manifest and index state from surviving sidecar JSON when `manifest.json` or `index.jsonl` is lost.
 
 ```bash
-python3 src/capture_automation/process_captures.py data/captures/raw --out .capture-automation --repair --json-report
-python3 src/capture_automation/process_captures.py data/captures/raw --out .capture-automation --verify --json-report
+python3 src/media_ark/process_captures.py data/captures/raw --out .media-ark --repair --json-report
+python3 src/media_ark/process_captures.py data/captures/raw --out .media-ark --verify --json-report
 ```
 
 Use `--repair-orphan-assets` only after preserving a tarball backup; it prunes sidecars and thumbnails that no longer map to canonical assets.

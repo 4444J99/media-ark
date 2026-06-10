@@ -5,7 +5,13 @@ import tempfile
 import unittest
 
 from src.platform.runtime import _safe_parse_json, build_command_for_mode, parse_options
-from src.platform.config import PlatformValidationError, default_out_dir, default_source_dir, processor_script, repo_root
+from src.platform.config import (
+    PlatformValidationError,
+    default_out_dir,
+    default_source_dir,
+    processor_script,
+    repo_root,
+)
 
 
 class TestPlatformRuntime(unittest.TestCase):
@@ -22,7 +28,6 @@ class TestPlatformRuntime(unittest.TestCase):
         self.assertEqual(options.out, default_out_dir())
         self.assertTrue(str(options.source).startswith(str(repo_root())))
         self.assertTrue(str(options.out).startswith(str(repo_root())))
-
 
     def test_parse_options_aliases_and_bool_coercion(self) -> None:
         payload = {
@@ -50,11 +55,9 @@ class TestPlatformRuntime(unittest.TestCase):
         self.assertEqual(options.query_limit, 12)
         self.assertEqual(options.timeout_sec, 30)
 
-
     def test_safe_parse_json_prefers_last_json(self) -> None:
         payload = "\n".join(["log line", '{"answer": 42}', "noise"])
         self.assertEqual(_safe_parse_json(payload), {"answer": 42})
-
 
     def test_build_command_for_query_mode(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -105,6 +108,6 @@ class TestPlatformRuntime(unittest.TestCase):
     def test_processor_script_is_under_repo_root(self) -> None:
         script = processor_script()
         self.assertEqual(script.name, "process_captures.py")
-        self.assertIn("capture_automation", str(script))
+        self.assertIn("media_ark", str(script))
         self.assertIn("/src/", str(script))
         self.assertNotIn("/src/src/", str(script))

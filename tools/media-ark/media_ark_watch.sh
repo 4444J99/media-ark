@@ -4,31 +4,31 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  capture_watch_service.sh [SOURCE_DIR] [OUT_DIR] [extra options...]
+  media_ark_watch.sh [SOURCE_DIR] [OUT_DIR] [extra options...]
 
 Description:
-  Opinionated watch runner for unattended capture automation with sensible defaults
+  Opinionated watch runner for unattended media-ark automation with sensible defaults
   and optional self-heal/event logging.
 
 Environment:
-  CAPTURE_WATCH_INTERVAL (default: 10)
-  CAPTURE_WATCH_IDLE_THRESHOLD (default: 0)
-  CAPTURE_MAX_RUNS (default: 0)
-  CAPTURE_MAX_FILES (default: 0)
-  CAPTURE_THUMBNAIL_SIZE (default: 1024)
-  CAPTURE_CLEANUP_RAW (0/1, default: 0)
-  CAPTURE_CLEANUP_RAW_DAYS (default: 30)
-  CAPTURE_SELF_HEAL (0/1, default: 1)
-  CAPTURE_SELF_HEAL_REPAIR_ORPHANS (0/1, default: 1)
-  CAPTURE_CLEANUP_STATE_DAYS (default: 0)
-  CAPTURE_COPY (0/1, default: 0)
-  CAPTURE_EVENT_LOG (default: <out>/events.jsonl)
-  CAPTURE_HEARTBEAT_FILE (default: <out>/watch-heartbeat.json)
-  CAPTURE_RUN_ID (optional)
+  MEDIA_ARK_WATCH_INTERVAL (default: 10)
+  MEDIA_ARK_WATCH_IDLE_THRESHOLD (default: 0)
+  MEDIA_ARK_MAX_RUNS (default: 0)
+  MEDIA_ARK_MAX_FILES (default: 0)
+  MEDIA_ARK_THUMBNAIL_SIZE (default: 1024)
+  MEDIA_ARK_CLEANUP_RAW (0/1, default: 0)
+  MEDIA_ARK_CLEANUP_RAW_DAYS (default: 30)
+  MEDIA_ARK_SELF_HEAL (0/1, default: 1)
+  MEDIA_ARK_SELF_HEAL_REPAIR_ORPHANS (0/1, default: 1)
+  MEDIA_ARK_CLEANUP_STATE_DAYS (default: 0)
+  MEDIA_ARK_COPY (0/1, default: 0)
+  MEDIA_ARK_EVENT_LOG (default: <out>/events.jsonl)
+  MEDIA_ARK_HEARTBEAT_FILE (default: <out>/watch-heartbeat.json)
+  MEDIA_ARK_RUN_ID (optional)
 
 Examples:
-  CAPTURE_SELF_HEAL=1 CAPTURE_SELF_HEAL_REPAIR_ORPHANS=1 \
-    ./tools/capture-automation/capture_watch_service.sh /path/to/source ./.capture-automation \
+  MEDIA_ARK_SELF_HEAL=1 MEDIA_ARK_SELF_HEAL_REPAIR_ORPHANS=1 \
+    ./tools/media-ark/media_ark_watch.sh /path/to/source ./.media-ark \
     --media-types image,document --thumbnail-size 640 --query-format json
 USAGE
 }
@@ -45,7 +45,7 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-PROCESS_SCRIPT="${REPO_ROOT}/src/capture_automation/process_captures.py"
+PROCESS_SCRIPT="${REPO_ROOT}/src/media_ark/process_captures.py"
 if [[ ! -f "$PROCESS_SCRIPT" ]]; then
   echo "Missing processor: $PROCESS_SCRIPT" >&2
   exit 1
@@ -57,14 +57,14 @@ if [[ "$#" -ge 1 && "$1" != "" && "${1:0:1}" != "-" ]]; then
   shift || true
 fi
 
-OUT_DIR=".capture-automation"
+OUT_DIR=".media-ark"
 if [[ "$#" -ge 1 && "${1:0:1}" != "-" ]]; then
   OUT_DIR="$1"
   shift || true
 fi
 
-if [[ -n "${CAPTURE_COPY:-}" ]]; then
-  if [[ "$CAPTURE_COPY" == "1" ]]; then
+if [[ -n "${MEDIA_ARK_COPY:-}" ]]; then
+  if [[ "$MEDIA_ARK_COPY" == "1" ]]; then
     COPY_FLAG="--copy"
   else
     COPY_FLAG=""
@@ -73,30 +73,30 @@ else
   COPY_FLAG=""
 fi
 
-if [[ -n "${CAPTURE_CLEANUP_RAW:-}" && "$CAPTURE_CLEANUP_RAW" == "1" ]]; then
-  CLEANUP_RAW="--cleanup-raw --cleanup-raw-days ${CAPTURE_CLEANUP_RAW_DAYS:-30}"
+if [[ -n "${MEDIA_ARK_CLEANUP_RAW:-}" && "$MEDIA_ARK_CLEANUP_RAW" == "1" ]]; then
+  CLEANUP_RAW="--cleanup-raw --cleanup-raw-days ${MEDIA_ARK_CLEANUP_RAW_DAYS:-30}"
 else
   CLEANUP_RAW=""
 fi
 
-if [[ "${CAPTURE_SELF_HEAL:-1}" == "1" ]]; then
+if [[ "${MEDIA_ARK_SELF_HEAL:-1}" == "1" ]]; then
   SELF_HEAL_FLAGS="--self-heal --self-heal-repair-orphans"
-  if [[ "${CAPTURE_SELF_HEAL_REPAIR_ORPHANS:-1}" != "1" ]]; then
+  if [[ "${MEDIA_ARK_SELF_HEAL_REPAIR_ORPHANS:-1}" != "1" ]]; then
     SELF_HEAL_FLAGS="--self-heal"
   fi
 else
   SELF_HEAL_FLAGS=""
 fi
 
-WATCH_INTERVAL="${CAPTURE_WATCH_INTERVAL:-10}"
-WATCH_IDLE_THRESHOLD="${CAPTURE_WATCH_IDLE_THRESHOLD:-0}"
-MAX_RUNS="${CAPTURE_MAX_RUNS:-0}"
-MAX_FILES="${CAPTURE_MAX_FILES:-0}"
-THUMBNAIL_SIZE="${CAPTURE_THUMBNAIL_SIZE:-1024}"
-EVENT_LOG="${CAPTURE_EVENT_LOG:-$OUT_DIR/events.jsonl}"
-HEARTBEAT="${CAPTURE_HEARTBEAT_FILE:-$OUT_DIR/watch-heartbeat.json}"
-RUN_ID="${CAPTURE_RUN_ID:-}"
-CLEANUP_STATE_DAYS="${CAPTURE_CLEANUP_STATE_DAYS:-0}"
+WATCH_INTERVAL="${MEDIA_ARK_WATCH_INTERVAL:-10}"
+WATCH_IDLE_THRESHOLD="${MEDIA_ARK_WATCH_IDLE_THRESHOLD:-0}"
+MAX_RUNS="${MEDIA_ARK_MAX_RUNS:-0}"
+MAX_FILES="${MEDIA_ARK_MAX_FILES:-0}"
+THUMBNAIL_SIZE="${MEDIA_ARK_THUMBNAIL_SIZE:-1024}"
+EVENT_LOG="${MEDIA_ARK_EVENT_LOG:-$OUT_DIR/events.jsonl}"
+HEARTBEAT="${MEDIA_ARK_HEARTBEAT_FILE:-$OUT_DIR/watch-heartbeat.json}"
+RUN_ID="${MEDIA_ARK_RUN_ID:-}"
+CLEANUP_STATE_DAYS="${MEDIA_ARK_CLEANUP_STATE_DAYS:-0}"
 
 run_args=(
   "$SOURCE_DIR"

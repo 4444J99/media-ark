@@ -6,5 +6,5 @@
 - Run the pipeline help command after major edits:
 
 ```bash
-python3 src/capture_automation/process_captures.py --help
+python3 src/media_ark/process_captures.py --help
 ```

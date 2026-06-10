@@ -1,4 +1,4 @@
-# Screen Capture Automation: Market-Informed Design + Local Automation
+# Media Ark: Market-Informed Design + Local Automation
 
 ## 1) External-market scan (what each steals best from)
 
@@ -25,7 +25,7 @@
 ## 3) Storage topology
 
 - `data/captures/raw/`: source captures (input only).
-- `.capture-automation/`: generated artifacts and pipeline state.
+- `.media-ark/`: generated artifacts and pipeline state.
   - `manifest.json`
   - `index.jsonl`
   - `image/`, `video/`, `document/`
@@ -37,23 +37,23 @@
 
 - Default processor behavior is **move mode**. Processed source files are removed from `data/captures/raw/` unless `--copy` is enabled.
 - If you need source files retained for replay, dedupe recovery, or audit, run in copy mode:
-  - `CAPTURE_PIPELINE_COPY=1 ./tools/capture-automation/capture_automation_pipeline.sh data/captures/raw .capture-automation`
-  - or add `--copy` to `process_captures.py` / `run_capture_automation.sh`.
+  - `CAPTURE_PIPELINE_COPY=1 ./tools/media-ark/media_ark_pipeline.sh data/captures/raw .media-ark`
+  - or add `--copy` to `process_captures.py` / `run_media_ark.sh`.
 
 ## 4) Run commands
 
 ```bash
 # Dry run
-python3 src/capture_automation/process_captures.py data/captures/raw --out .capture-automation --dry-run
+python3 src/media_ark/process_captures.py data/captures/raw --out .media-ark --dry-run
 
 # Copy mode with one pass
-./tools/capture-automation/run_capture_automation.sh data/captures/raw .capture-automation --copy
+./tools/media-ark/run_media_ark.sh data/captures/raw .media-ark --copy
 
 # Watch mode
-./tools/capture-automation/capture_watch_service.sh data/captures/raw .capture-automation --watch
+./tools/media-ark/media_ark_watch.sh data/captures/raw .media-ark --watch
 
 # Full pipeline: check -> process -> verify
-./tools/capture-automation/capture_automation_pipeline.sh data/captures/raw .capture-automation
+./tools/media-ark/media_ark_pipeline.sh data/captures/raw .media-ark
 ```
 
 ## 5) Recommended hardening

@@ -4,21 +4,21 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  run_capture_automation.sh [SOURCE_DIR] [OUT_DIR] [process_captures options...]
+  run_media_ark.sh [SOURCE_DIR] [OUT_DIR] [process_captures options...]
 
 Arguments:
   SOURCE_DIR  Source folder containing media (default: current directory)
-  OUT_DIR     Output root for process_captures.py (default: .capture-automation)
+  OUT_DIR     Output root for process_captures.py (default: .media-ark)
 
 Examples:
-  run_capture_automation.sh
-  run_capture_automation.sh /path/to/captures
-  run_capture_automation.sh /path/to/captures /path/to/out --copy --verbose
+  run_media_ark.sh
+  run_media_ark.sh /path/to/captures
+  run_media_ark.sh /path/to/captures /path/to/out --copy --verbose
 EOF
 }
 
 SOURCE_DIR="$(pwd)"
-OUT_DIR=".capture-automation"
+OUT_DIR=".media-ark"
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   usage
@@ -33,7 +33,7 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-PROCESS_SCRIPT="${REPO_ROOT}/src/capture_automation/process_captures.py"
+PROCESS_SCRIPT="${REPO_ROOT}/src/media_ark/process_captures.py"
 
 if [[ ! -f "$PROCESS_SCRIPT" ]]; then
   echo "Processing script missing: $PROCESS_SCRIPT" >&2
