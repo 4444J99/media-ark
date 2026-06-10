@@ -166,7 +166,7 @@ The 2026-06-09 premortem of PR #9 surfaced 9 findings (F1–F9). The
 | F6 (OQ1 hedge downgrades F4 priority) | Amended line 37 of the live closeout. Replaced "preventive, not curative" with "preventive in deployment history; structural via test_s1." Makes the test-coverage artifact the priority signal, not the production-validation status. |
 | F7 (issue #5 comment off-axis) | Posted an on-axis follow-up comment on issue #5 stating the runner-pickup pattern is unchanged and giving the close-criterion status (6 in-flight, 3 failure, 1 cancelled re-derived). |
 | F8 (test file narrative density) | This file. Extracted the S1/S2/S3 prose to `docs/regression-findings.md`. Test file net change: -80 lines, density ~15.6 → ~12.6 lines/test. |
-| F9 (release:verify local-only) | Created `tox.ini` with a `py310` and `py312` matrix. No wheel-install env (no `pyproject.toml` exists in the repo). The matrix exercises both Python versions against the source tree using `PYTHONPATH=src`. |
+| F9 (release:verify local-only) | Created `tox.ini` with a `py311` and `py314` matrix. No wheel-install env (no `pyproject.toml` exists in the repo). The matrix exercises both Python versions against the source tree using `PYTHONPATH=src`. (Drift note: the PR #10 description said "py310, py312" but the actual `tox.ini` (line 32) was `envlist = py311, py314` from the start. The live closeout line 209 has always been correct; only the companion doc was wrong. Fixed in PR #12.) |
 
 ---
 
@@ -186,7 +186,8 @@ imports). This means:
 - A `tox` matrix that tests against a wheel would be testing a
   non-existent path; the F9 premortem's `py312-wheel` env
   recommendation is therefore inapplicable here. The matrix
-  envs in `tox.ini` are `py310` and `py312` only.
+  envs in `tox.ini` are `py311` and `py314` only
+  (`envlist = py311, py314` at `tox.ini:32`).
 
 The hardcoded `src/capture_automation/process_captures.py` path in
 the `PROCESSOR` constant in the test file is the canary the F9
