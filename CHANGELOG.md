@@ -35,6 +35,21 @@ This project follows [Keep a Changelog](https://keepachangelog.com/) and uses
 - MCP tool names `capture_status`, `capture_check`, `capture_run`, `capture_verify`, `capture_query` (API contract; renaming these would break MCP clients).
 - The 12 prior closeout files in `~/.Codex/plans/` (historical record; references the old repo URL by design).
 
+## [0.2.0] — 2026-06-10
+
+### Added
+- `docs/legacy-data-2026-06-10.md` — provenance and migration recipe for the pre-rename capture snapshot (`.media-ark-data-legacy-2026-06-10/`, 771 MB / 548 files).
+- GitHub repo metadata aligned with the Media Ark brand: `description` ("Media Ark: a local-first media archive pipeline for images, video, PDF, and documents."), `homepageUrl` (`https://media-ark.org`), and topics (`media-pipeline`, `local-first`, `ocr`, `automation`, `data-pipeline`, `python`; `screen-capture` removed).
+- Re-verification record in `docs/SHIP_EVIDENCE.md` (§"Re-verification on 2026-06-10 (post-rename, post-PR-#13)").
+
+### Changed
+- `.gitignore` — `.media-ark-data-legacy-2026-06-10/` excluded from version control (preserved on disk; documented in `docs/legacy-data-2026-06-10.md`).
+- `docs/PROFILE_README.md` — title and product description updated from "Screen Capture Automation" to "Media Ark"; brand section added.
+
+### Verified
+- `npm run release:verify` exits `ok: true` on `main` at commit `1e89e5b` (engine: New=4 duplicates=0 errors=0; all 5 verifier gates green: unit/platform suite, deterministic engine + sidecar recovery, one-command API/dashboard startup, MCP contract + telemetry, docs + release artifacts).
+- Runner-pickup GitHub-Actions issue unchanged (documented as known, non-blocking; branch protection does not require it).
+
 ## [0.1.0] — 2026-06-09 (renamed entry)
 
 ### Added
