@@ -78,7 +78,7 @@ not a paragraph. Multiple rules in one entry are a smell.
 
 The full intent inventory is in
 [`routing.tables.toml`](./routing.tables.toml). As of PR #18, the
-inventory has 14 named intents:
+inventory has 14 named intents (PR #18 fills the 4 originally-named gaps):
 
 **Read-only or comment-only:**
 

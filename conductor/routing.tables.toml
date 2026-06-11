@@ -93,3 +93,42 @@ constraints = [
   "Cross-references in `conductor/README.md` and `fleet-standing-rules.md` must stay in sync with the actual file paths.",
   "The `routing.md` (narrative) and `routing.tables.toml` (data) split is a PR #18 convention; both must be updated together when intents change.",
 ]
+
+
+[intent.branch-protect-edit]
+description = "Modify `main` branch protection via the GitHub API. Conductor-only."
+agents      = []
+constraints = [
+  "No agent may call `gh api .../branches/main/protection` (PUT, PATCH, or DELETE). The `MERGE_PATH.md` §\"What actually blocks the PR merge\" diagnosis workflow is the precedent: branch protection changes are a human decision, full stop.",
+  "When the issue #5 close-criterion is met (self-hosted-runner registration or `not_planned`), the re-enable command in `docs/repo-audit.md` Gap #1 is the canonical recipe. The agent may post the recipe as a PR comment; the agent may not execute it.",
+  "Branch protection changes are paired with `release-publish`: a release in flight is the trigger to re-enable required status checks. The pairing is named, not enforced by automation.",
+]
+
+[intent.release-publish]
+description = "Bump the version in `pyproject.toml` and `package.json`, update `CHANGELOG.md` to a dated release section, and tag. Conductor-only."
+agents      = []
+constraints = [
+  "No agent may bump `version` in `pyproject.toml` or `package.json`. The 0.2.0 closeout shipped the version bump in PR #13 (squash-merge `ebd9bc5`) as part of the rename-evolve; the next bump is a conductor call.",
+  "The version bump must be paired with a `CHANGELOG.md` `[Unreleased]` → `[X.Y.Z] — YYYY-MM-DD` rename. The CHANGELOG follows [Keep a Changelog](https://keepachangelog.com/); the agent may *draft* the renamed section, the conductor commits and tags.",
+  "Tagging: `git tag -a vX.Y.Z -m 'Release X.Y.Z'` followed by `git push origin vX.Y.Z`. The tag is a release artifact, not a session artifact; the conductor tags.",
+  "Paired with `branch-protect-edit`: once a tag is pushed, re-enable required status checks on `main` (when Actions billing recovers per issue #5).",
+]
+
+[intent.npm-publish]
+description = "Publish `media-ark` to npm. Conductor-only, requires the npm token (not yet in `secrets-map.md`)."
+agents      = []
+constraints = [
+  "No agent may run `npm publish`. The npm token is not yet in `secrets-map.md`; per the secrets-map cell-value semantics, `unset` is implicit `none`, so no agent has token access.",
+  "Pre-publish checklist (the agent may draft, the conductor executes): (1) `version` in `package.json` matches the `release-publish` intent, (2) `npm pack` produces a tarball whose contents match the repo's `pyproject.toml` files, (3) `npm run release:verify` is green on the release commit, (4) the release commit has a tag from the `release-publish` intent.",
+  "The `BRAND_NPM` constant in `src/media_ark/__init__.py` is the package name. Renaming the package is a brand-module change (PR #13's discipline).",
+]
+
+[intent.worktree-peer-Desktop]
+description = "Retired. The `~/Desktop/media-ark--*` worktree-peer convention is no longer canonical. Use `~/Workspace/4444J99/media-ark--*` instead."
+agents      = []
+constraints = [
+  "The `~/Desktop/` peer convention (the 0.2.0 closeout's `media-ark--container-2026-06-10`) is retired as of 2026-06-11. The canonical peer location is `~/Workspace/4444J99/media-ark--<purpose>`, per the workspace's `~/Workspace/AGENTS.md` §\"Project Structure & Module Organization\" double-hyphen convention.",
+  "No new worktrees at `~/Desktop/media-ark--*`. Pre-existing `~/Desktop/media-ark--*` worktrees are *legacy*; the conductor decides per-worktree whether to relocate, prune, or leave (the soul-persists rule: never destroy a worktree or branch without conductor authorization).",
+  "The one exception: `worktree-new` explicitly names `~/Desktop/media-ark--<purpose>` as a cross-host peer *only* when the conductor has explicitly asked for the Desktop location in the session. The default is the workspace peer.",
+  "Migration path: `git worktree move ~/Desktop/media-ark--<name> ~/Workspace/4444J99/media-ark--<name>` is a no-op for the branch but a relocation for the filesystem. The conductor runs the move; the agent may propose the move with the worktree name and last-touch date.",
+]
