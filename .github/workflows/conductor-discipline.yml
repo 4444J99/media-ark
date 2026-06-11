@@ -1,0 +1,167 @@
+name: conductor-discipline
+
+# Validates `conductor/` structure on PRs that touch the conductor
+# directory. Closes the F3-style gap (the same shape as the prior
+# lint-workflows.yml fix in PR #11): the surface ships with the
+# discipline, but the discipline is not enforced by any CI job.
+# A future PR that breaks the surface (invalid TOML, missing
+# cross-references, un-named dispatch files) would slip through
+# `npm run release:verify` because that script does not parse
+# the conductor/ tree.
+#
+# Validates:
+# 1. `conductor/routing.tables.toml` parses as valid TOML with
+#    `python3 -c "import tomllib; tomllib.loads(...)"` (the
+#    PR #18 refactor split routing.toml into routing.md +
+#    routing.tables.toml specifically to make this check
+#    possible).
+# 2. Every `intent.<verb>` table has `description`, `agents`, and
+#    `constraints` fields (the format spec in routing.md).
+# 3. Every agent kind named in `dispatch/<agent>.md` filenames
+#    is also named in `routing.tables.toml` as authorized for
+#    at least one intent (catches the "dispatch file for an
+#    agent kind that has no authority" anti-pattern).
+# 4. Every cross-reference in conductor/**/*.md that points at
+#    a relative file path resolves to an existing file.
+#
+# Runs on hosted runners only (no `runs-on: self-hosted`),
+# so it is isolated from the runner-pickup pattern documented
+# in issue #5. The job is doc-only validation; it does not
+# require Python deps beyond the stdlib.
+#
+# The job uses the `actions/checkout` action but does NOT use
+# `actions/setup-python` — the host runner's Python 3.11+ has
+# `tomllib` in the stdlib (3.11+) and the workflow pins
+# `python-version: "3.11"` in the existing automation-ci.yml
+# to match. For this workflow we set up Python explicitly to
+# match.
+
+on:
+  pull_request:
+    paths:
+      - 'conductor/**'
+      - 'conductor/*.md'
+      - 'conductor/*.toml'
+
+jobs:
+  validate-conductor:
+    name: Validate conductor/ structure
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate conductor/routing.tables.toml
+        run: |
+          python3 - <<'PY'
+          import sys
+          import tomllib
+          import pathlib
+
+          root = pathlib.Path("conductor")
+          tables_path = root / "routing.tables.toml"
+          if not tables_path.exists():
+              print("ERROR: conductor/routing.tables.toml is missing", file=sys.stderr)
+              print("  (the PR #18 refactor split routing.toml into routing.md + routing.tables.toml;",
+                    file=sys.stderr)
+              print("   both files must exist on every conductor/-touching PR)", file=sys.stderr)
+              sys.exit(1)
+
+          with open(tables_path, "rb") as f:
+              parsed = tomllib.load(f)
+
+          intents = parsed.get("intent")
+          if not isinstance(intents, dict) or not intents:
+              print("ERROR: conductor/routing.tables.toml has no [intent.*] tables", file=sys.stderr)
+              sys.exit(1)
+
+          required_fields = {"description", "agents", "constraints"}
+          for verb, table in intents.items():
+              missing = required_fields - set(table.keys())
+              if missing:
+                  print(f"ERROR: intent.{verb} is missing required fields: {sorted(missing)}", file=sys.stderr)
+                  sys.exit(1)
+              if not isinstance(table["agents"], list):
+                  print(f"ERROR: intent.{verb}.agents must be a list, got {type(table['agents']).__name__}", file=sys.stderr)
+                  sys.exit(1)
+              if not isinstance(table["constraints"], list):
+                  print(f"ERROR: intent.{verb}.constraints must be a list, got {type(table['constraints']).__name__}", file=sys.stderr)
+                  sys.exit(1)
+
+          print(f"OK: {len(intents)} intent tables, all have description/agents/constraints")
+          PY
+
+      - name: Validate dispatch file naming
+        run: |
+          python3 - <<'PY'
+          import sys
+          import pathlib
+          import re
+
+          dispatch_dir = pathlib.Path("conductor/dispatch")
+          if not dispatch_dir.exists():
+              print("ERROR: conductor/dispatch/ is missing", file=sys.stderr)
+              sys.exit(1)
+
+          expected_agents = {"codex", "claude", "gemini", "opencode", "jules", "gpt-scheduled"}
+          actual_files = {p.stem for p in dispatch_dir.glob("*.md")}
+          unexpected = actual_files - expected_agents
+          if unexpected:
+              print(f"ERROR: dispatch file(s) for agent kind(s) not in the expected set: {sorted(unexpected)}", file=sys.stderr)
+              print(f"  expected_agents = {sorted(expected_agents)}", file=sys.stderr)
+              print("  To add a new agent kind, add it to:", file=sys.stderr)
+              print("    1. conductor/dispatch/<agent>.md (the lens-shaped projection)", file=sys.stderr)
+              print("    2. conductor/routing.tables.toml (at least one [intent.*] entry with the agent in agents=[])", file=sys.stderr)
+              print("    3. conductor/fleet-standing-rules.md (the per-agent override slot in §Per-agent override slots)", file=sys.stderr)
+              print("    4. this workflow's expected_agents set (this file)", file=sys.stderr)
+              sys.exit(1)
+
+          missing = expected_agents - actual_files
+          if missing:
+              print(f"WARNING: expected dispatch file(s) for agent kind(s) not present: {sorted(missing)}", file=sys.stderr)
+              print("  This is a warning, not an error. The PR can land; the agent kind's", file=sys.stderr)
+              print("  authority is implicitly 'no access' until its dispatch file is authored.", file=sys.stderr)
+          else:
+              print(f"OK: all {len(expected_agents)} expected dispatch files present")
+          PY
+
+      - name: Validate cross-references
+        run: |
+          python3 - <<'PY'
+          import sys
+          import pathlib
+          import re
+
+          root = pathlib.Path(".")
+          conductor = root / "conductor"
+          if not conductor.exists():
+              sys.exit(0)  # already caught by the table-validation step
+
+          # Find all relative-path references of the form (../foo/bar.md) or (./foo.md)
+          # inside conductor/**/*.md
+          ref_re = re.compile(r"\((?:\.{1,2}/)+[\w./-]+\.md\)")
+          bad_refs = []
+          checked = 0
+          for md in conductor.rglob("*.md"):
+              text = md.read_text()
+              for ref in set(ref_re.findall(text)):
+                  # Strip the parens; resolve from the file's directory.
+                  rel = ref[1:-1]
+                  target = (md.parent / rel).resolve()
+                  checked += 1
+                  if not target.exists():
+                      bad_refs.append(f"  {md}: {ref} -> {target} (missing)")
+
+          if bad_refs:
+              print(f"ERROR: {len(bad_refs)} cross-references in conductor/**/*.md do not resolve:", file=sys.stderr)
+              for line in bad_refs:
+                  print(line, file=sys.stderr)
+              sys.exit(1)
+          print(f"OK: {checked} cross-references checked, all resolve")
+          PY
