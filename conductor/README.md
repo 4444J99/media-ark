@@ -15,7 +15,8 @@ product's *identity strings*.
 
 | Path | Purpose |
 |---|---|
-| `routing.toml` | Intent verbs (verify, commit, pr-draft, …) → authorized agent kinds. Single source of truth for "who does what." |
+| `routing.md` | The human-readable narrative for cross-agent routing: format spec, field semantics, per-intent descriptions, cross-references. |
+| `routing.tables.toml` | The parseable TOML data: every intent is a `[intent.<verb>]` table with `description`, `agents`, and `constraints`. Tools enumerate intents by parsing this file. |
 | `fleet-standing-rules.md` | Shared invariants (additive-only, squash-merge-only, atomic-commit-only, N/A-is-a-vacuum, no-destroy-without-conductor-auth) and the per-agent override slots where an agent's authority differs from the default. Extends — does not duplicate — `MERGE_PATH.md`. |
 | `dispatch/<agent>.md` | Per-agent-kind projection of the canonical handoff. Same facts as the source handoff, agent-shaped (scope, authority, blind spots, lane markers). One file per agent kind that has touched the repo. |
 | `secrets-map.md` | Per-secret, per-agent-kind access matrix. **All cells are `unset — awaiting conductor` until the conductor explicitly authorizes an agent's access.** This file is a skeleton by design: agent authority is a human decision, not a generated one. |
@@ -28,10 +29,11 @@ product's *identity strings*.
 2. Read your own `dispatch/<your-agent-kind>.md`. The projection names
    exactly which actions you may take, which you may not, and which
    actions are conductor-only.
-3. If your intent is named in `routing.toml`, follow the routing
-   rule. If your intent is *not* named, **stop and report** — the
-   routing file is the single source of truth for who does what,
-   and the absence of a rule is a gap, not an invitation.
+3. If your intent is named in `routing.tables.toml`, follow the
+   routing rule (the narrative in `routing.md` is the human
+   companion). If your intent is *not* named, **stop and report** —
+   the routing files are the single source of truth for who does
+   what, and the absence of a rule is a gap, not an invitation.
 4. If a secret is in `secrets-map.md` and the cell for your agent
    kind is `unset`, **do not touch it.** Cells get filled by the
    conductor, not by an agent, not by a bot, not by inference.
@@ -68,7 +70,7 @@ product's *identity strings*.
   rules, which reference MERGE_PATH.md).
 - **Cross-agent coordination contracts:** when two agents need to
   hand off work mid-task (e.g. Claude drafts a PR body, Codex
-  commits it), the contract is implicit in `routing.toml` and the
+  commits it), the contract is implicit in `routing.tables.toml` (and the narrative in `routing.md`) and the
   per-agent dispatch files. A future iteration may promote this to
   an explicit `coordination-protocol.md` if hand-offs start failing.
 

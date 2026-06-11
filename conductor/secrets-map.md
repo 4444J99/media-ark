@@ -83,6 +83,6 @@ prompt's framing).
 ## Cross-references
 
 - [`fleet-standing-rules.md`](./fleet-standing-rules.md) §"Per-agent override slots" — the per-agent authority that the secrets-map cells operationalize
-- [`routing.toml`](./routing.toml) — the intent → agent map (cells here are independent of routing; an agent may be authorized for an intent without being authorized for the secret that intent touches)
+- [`routing.tables.toml`](./routing.tables.toml) (parseable) and [`routing.md`](./routing.md) (narrative) — the intent → agent map (cells here are independent of routing; an agent may be authorized for an intent without being authorized for the secret that intent touches)
 - [`dispatch/<agent>.md`](./dispatch/) — the per-agent-kind projections (each one references this file by name)
 - [`../../docs/handoff/media-ark-0.2.0-2026-06-10.md`](../../docs/handoff/media-ark-0.2.0-2026-06-10.md) §"Critical Context" — the closeout narrative's reference to repo-level secrets (which is, as of this writing, minimal — `media-ark` is a local-first pipeline that does not require service-account-class secrets to run)

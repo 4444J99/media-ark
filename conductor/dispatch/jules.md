@@ -13,7 +13,7 @@ You are operating as **jules**. The session's source of truth for
 the repo's state is the canonical handoff. The session's source
 of truth for cross-agent rules is
 [`../fleet-standing-rules.md`](../fleet-standing-rules.md) and
-[`../routing.toml`](../routing.toml).
+[`../routing.tables.toml` (parseable) and `../routing.md` (narrative)](../routing.tables.toml).
 
 **Important:** Jules has not been observed in this repo's
 commit history or PR history. This dispatch projection is
@@ -24,7 +24,7 @@ work. There may be observations of Jules activity on adjacent
 repos (the user's other workspaces); the standing rules below
 apply to *this* repo, not to the fleet globally.
 
-## What you are authorized to do (read `routing.toml` first)
+## What you are authorized to do (read `routing.tables.toml` (and `routing.md`) first)
 
 | Intent | Authorized? | Notes |
 |---|---|---|
@@ -106,7 +106,7 @@ A jules session is lane-clean when:
 
 ## Cross-references
 
-- [`../routing.toml`](../routing.toml) — the intent → agent map
+- [`../routing.tables.toml` (parseable) and `../routing.md` (narrative)](../routing.tables.toml) — the intent → agent map
 - [`../fleet-standing-rules.md`](../fleet-standing-rules.md) — the shared invariants and per-agent override slots
 - [`../../docs/handoff/media-ark-0.2.0-2026-06-10.md`](../../docs/handoff/media-ark-0.2.0-2026-06-10.md) — the canonical handoff
 - [`../../docs/SHIP_EVIDENCE.md`](../../docs/SHIP_EVIDENCE.md) — the verified-evidence surface
