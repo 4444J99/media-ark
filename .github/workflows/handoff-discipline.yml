@@ -1,0 +1,183 @@
+name: handoff-discipline
+
+# Validates `docs/handoff/` structure on PRs that touch the
+# handoff directory. Closes the F3-style gap for the handoff
+# surface: the 0.2.0 handoff's "Parity gap" lesson (the
+# handoff was on disk but untracked for an extended period
+# because direct-push to `main` was rejected) showed that
+# the handoff surface needs *enforced* discipline, not just
+# documented convention.
+#
+# Validates:
+# 1. Every file in `docs/handoff/` matches the naming
+#    convention `<project>-<version>-<YYYY-MM-DD>.md`.
+#    A handoff file that doesn't match the pattern is
+#    rejected (the pattern is the surface's contract).
+# 2. Every handoff file has a top-level `# Agent Handoff: ...`
+#    or `# Handoff: ...` heading (the surface's
+#    self-identification convention).
+# 3. Every handoff file has at least one of these
+#    conventional sections: `## Current State`, `## Completed
+#    Work`, `## Risks & Warnings`, or `## Recovery Protocol`.
+#    The section name is the discipline; missing sections
+#    means the handoff doesn't have the structure future
+#    agents are trained to read.
+# 4. Cross-references to other handoff files in the same
+#    directory resolve.
+#
+# The "naming what this cannot enforce" pattern (the S1-walker
+# F2 Blindspot A) applies here: this workflow enforces the
+# *shape* of a handoff, not its *substance*. A handoff can
+# pass all four checks and still be wrong; the PR review is
+# the gate for substance.
+#
+# Runs on hosted runners only (no `runs-on: self-hosted`),
+# so it is isolated from the runner-pickup pattern documented
+# in issue #5. Doc-only validation; uses python stdlib only.
+
+on:
+  pull_request:
+    paths:
+      - 'docs/handoff/**'
+      - 'docs/handoff/*.md'
+
+jobs:
+  validate-handoff:
+    name: Validate handoff discipline
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate handoff file naming and structure
+        run: |
+          python3 - <<'PY'
+          import sys
+          import pathlib
+          import re
+          from datetime import date
+
+          handoff_dir = pathlib.Path("docs/handoff")
+          if not handoff_dir.exists():
+              print("OK: docs/handoff/ does not exist (no handoff files to validate)")
+              sys.exit(0)
+
+          # Naming convention: <project>-<version>-<YYYY-MM-DD>.md
+          # - <project> is one or more kebab-case segments
+          # - <version> is semver-ish (X.Y.Z, optionally with pre-release tags)
+          # - <YYYY-MM-DD> is an ISO date
+          name_re = re.compile(
+              r"^(?P<project>[a-z0-9][a-z0-9-]*[a-z0-9])"
+              r"-(?P<version>\d+\.\d+\.\d+(?:-[a-z0-9.-]+)?)"
+              r"-(?P<date>\d{4}-\d{2}-\d{2})"
+              r"\.md$"
+          )
+
+          required_sections = [
+              "## Current State",
+              "## Completed Work",
+              "## Risks & Warnings",
+              "## Recovery Protocol",
+          ]
+          heading_re = re.compile(r"^#{1,2}\s+.+", re.MULTILINE)
+
+          errors = []
+          warnings = []
+          handoff_files = sorted(handoff_dir.glob("*.md"))
+          if not handoff_files:
+              print("OK: docs/handoff/ exists but is empty")
+              sys.exit(0)
+
+          for handoff in handoff_files:
+              rel = handoff.relative_to(pathlib.Path("."))
+              m = name_re.match(handoff.name)
+              if not m:
+                  errors.append(
+                      f"{rel}: filename does not match the naming convention "
+                      f"'<project>-<version>-<YYYY-MM-DD>.md'"
+                  )
+                  continue
+              # Verify the date is a real date
+              try:
+                  date.fromisoformat(m.group("date"))
+              except ValueError:
+                  errors.append(
+                      f"{rel}: filename date '{m.group('date')}' is not a valid ISO date"
+                  )
+
+              text = handoff.read_text()
+              # Check for a top-level Agent Handoff heading
+              if not re.search(r"^#\s+(Agent\s+Handoff|Handoff)", text, re.MULTILINE):
+                  warnings.append(
+                      f"{rel}: no top-level '# Agent Handoff: ...' or '# Handoff: ...' heading"
+                  )
+
+              # Check for at least one conventional section
+              sections_present = [s for s in required_sections if s in text]
+              if not sections_present:
+                  errors.append(
+                      f"{rel}: missing all conventional sections "
+                      f"(need at least one of: {', '.join(required_sections)})"
+                  )
+
+          if warnings:
+              print("WARNINGS:", file=sys.stderr)
+              for w in warnings:
+                  print(f"  {w}", file=sys.stderr)
+
+          if errors:
+              print("ERRORS:", file=sys.stderr)
+              for e in errors:
+                  print(f"  {e}", file=sys.stderr)
+              print(
+                  f"\n{len(errors)} handoff-discipline violations; "
+                  f"see https://github.com/4444J99/media-ark/blob/main/docs/regression-findings.md "
+                  f"for the discipline pattern.",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+
+          print(f"OK: {len(handoff_files)} handoff file(s) validated")
+          PY
+
+      - name: Validate handoff cross-references
+        run: |
+          python3 - <<'PY'
+          import sys
+          import pathlib
+          import re
+
+          handoff_dir = pathlib.Path("docs/handoff")
+          if not handoff_dir.exists():
+              sys.exit(0)
+
+          # Find relative cross-references to other files in docs/handoff/
+          ref_re = re.compile(r"\(\.\./handoff/([\w./-]+\.md)\)|\((handoff/[\w./-]+\.md)\)")
+          bad_refs = []
+          checked = 0
+
+          for md in handoff_dir.glob("*.md"):
+              text = md.read_text()
+              for match in set(ref_re.findall(text)):
+                  # The regex returns tuples; extract whichever group matched.
+                  target_rel = next((g for g in match if g), None)
+                  if not target_rel:
+                      continue
+                  target = (handoff_dir / target_rel).resolve()
+                  checked += 1
+                  if not target.exists():
+                      bad_refs.append(f"  {md.name}: ({target_rel}) -> missing")
+
+          if bad_refs:
+              print(f"ERROR: {len(bad_refs)} cross-references in docs/handoff/ do not resolve:", file=sys.stderr)
+              for line in bad_refs:
+                  print(line, file=sys.stderr)
+              sys.exit(1)
+          print(f"OK: {checked} cross-references checked, all resolve")
+          PY
