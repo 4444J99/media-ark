@@ -19,6 +19,7 @@
 ## Table of Contents
 
 - [Problem](#problem)
+- [Pro Tier](#pro-tier)
 - [Architecture](#architecture)
 - [Quick Start](#quick-start)
 - [Storage Model](#storage-model)
@@ -39,6 +40,19 @@ This repo provides a resilient, local-first pipeline that converts raw media int
 - repairable state.
 
 The brand: **Media Ark** (the "ark" metaphor — a small, intentional, durable collection of heterogeneous things kept safe through disruption). Domain: [media-ark.org](https://media-ark.org). GitHub: [4444J99/media-ark](https://github.com/4444J99/media-ark). Previously: `screen-capture-automation` (renamed 2026-06-10).
+
+## Pro Tier
+
+Media Ark stays useful as a free, local-only repository at [4444J99/media-ark](https://github.com/4444J99/media-ark): your captures, OCR, manifests, indexes, and reports live on your machine under `.media-ark/`, and you decide how to copy or back them up.
+
+For knowledge workers and journalists, the harder problem is not just processing files. It is preserving the material that supports a story, investigation, research brief, client memo, or long-running project when devices fail or work moves across machines. Media Ark Pro adds encrypted cloud sync and backup for **$7/mo** so source material, derived metadata, and searchable context can be recovered without giving up a local-first workflow.
+
+| Tier | Price | Best for | What is included |
+| --- | --- | --- | --- |
+| Free | $0 | Local-first personal archives, private experiments, and repository-based automation | CLI/API/MCP/dashboard, local processing, local manifests, local indexes, local reports |
+| Pro | $7/mo | Knowledge workers and journalists who need durable capture libraries across devices | Everything in Free, plus encrypted cloud sync, encrypted backup, and recovery for the archive state |
+
+See [docs/PRICING.md](docs/PRICING.md) for the full pricing and value-prop notes.
 
 ## Architecture
 
@@ -203,6 +217,7 @@ python3 src/media_ark/process_captures.py data/captures/raw --out .media-ark --r
 ## Documentation
 
 - [docs/](docs/README.md)
+- [docs/PRICING.md](docs/PRICING.md)
 - [docs/CAPTURE_PIPELINE.md](docs/CAPTURE_PIPELINE.md)
 - [docs/getting-started.md](docs/getting-started.md)
 - [docs/ONBOARDING.md](docs/ONBOARDING.md)
