@@ -34,10 +34,12 @@ from .config import (  # noqa: E402
     default_out_dir,
     default_source_dir,
     normalize_platform_path,
+    pro_enabled,
     validate_choice,
     validate_query,
 )
 from .runtime import load_snapshot, run_capture_action  # noqa: E402
+from .sync import sync_status  # noqa: E402
 
 
 MAX_JSON_BODY_BYTES = 1_000_000
@@ -352,6 +354,8 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
                 "api_version": "1.0",
                 "source": str(source),
                 "out": str(out),
+                "pro": pro_enabled(),
+                "sync": sync_status(),
             }
             status.update(load_snapshot(out))
             _write_json(self, 200, status)
