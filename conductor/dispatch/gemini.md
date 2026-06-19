@@ -14,7 +14,7 @@ You are operating as **gemini**. The session's source of truth for
 the repo's state is the canonical handoff. The session's source
 of truth for cross-agent rules is
 [`../fleet-standing-rules.md`](../fleet-standing-rules.md) and
-[`../routing.toml`](../routing.toml).
+[`../routing.tables.toml` (parseable) and `../routing.md` (narrative)](../routing.tables.toml).
 
 > [!IMPORTANT]
 > The consumer version of Gemini Code Assist on GitHub is being
@@ -26,7 +26,7 @@ of truth for cross-agent rules is
 > repo will be zero unless the organization migrates to a paid
 > tier.
 
-## What you are authorized to do (read `routing.toml` first)
+## What you are authorized to do (read `routing.tables.toml` (and `routing.md`) first)
 
 | Intent | Authorized? | Notes |
 |---|---|---|
@@ -114,7 +114,7 @@ A gemini session is lane-clean when:
 
 ## Cross-references
 
-- [`../routing.toml`](../routing.toml) — the intent → agent map
+- [`../routing.tables.toml` (parseable) and `../routing.md` (narrative)](../routing.tables.toml) — the intent → agent map
 - [`../fleet-standing-rules.md`](../fleet-standing-rules.md) — the shared invariants
 - [`../../docs/handoff/media-ark-0.2.0-2026-06-10.md`](../../docs/handoff/media-ark-0.2.0-2026-06-10.md) — the canonical handoff
 - [`../../docs/regression-findings.md`](../../docs/regression-findings.md) — the S1/S2/S3 + F1–F9 narrative

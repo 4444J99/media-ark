@@ -88,5 +88,5 @@ already permit.**
 - [`docs/handoff/media-ark-0.2.0-2026-06-10.md`](../docs/handoff/media-ark-0.2.0-2026-06-10.md) — the 0.2.0 closeout handoff (the agent session this conductor surface extends)
 - [`docs/regression-findings.md`](../docs/regression-findings.md) — the S1/S2/S3 + F1–F9 pattern this file imitates (lean facts, dense context, named blind spots)
 - [`docs/SHIP_EVIDENCE.md`](../docs/SHIP_EVIDENCE.md) — the verified-evidence surface for releases
-- [`routing.toml`](./routing.toml) — the intent-verb-to-agent-kind map
+- [`routing.tables.toml`](./routing.tables.toml) (parseable data) and [`routing.md`](./routing.md) (narrative) — the intent-verb-to-agent-kind map
 - [`dispatch/<agent>.md`](./dispatch/) — the per-agent-kind projections

@@ -17,14 +17,14 @@ You are operating as **claude**. The session's source of truth for
 the repo's state is the canonical handoff. The session's source
 of truth for cross-agent rules is
 [`../fleet-standing-rules.md`](../fleet-standing-rules.md) and
-[`../routing.toml`](../routing.toml).
+[`../routing.tables.toml` (parseable) and `../routing.md` (narrative)](../routing.tables.toml).
 
 The PR #16 receipt (`EV-2026-06-11-200008`) explicitly named the
 campaign rule: *"Merge at your discretion — campaign rules forbid
 the agent from merging."* That rule applies to you in every
 session, not just the session that opened PR #16.
 
-## What you are authorized to do (read `routing.toml` first)
+## What you are authorized to do (read `routing.tables.toml` (and `routing.md`) first)
 
 | Intent | Authorized? | Notes |
 |---|---|---|
@@ -96,7 +96,7 @@ A claude session is lane-clean when:
 
 ## Cross-references
 
-- [`../routing.toml`](../routing.toml) — the intent → agent map
+- [`../routing.tables.toml` (parseable) and `../routing.md` (narrative)](../routing.tables.toml) — the intent → agent map
 - [`../fleet-standing-rules.md`](../fleet-standing-rules.md) — the shared invariants
 - [`../../docs/handoff/media-ark-0.2.0-2026-06-10.md`](../../docs/handoff/media-ark-0.2.0-2026-06-10.md) — the canonical handoff
 - PR #16 — the canonical example of a `docs:` PR authored by claude with the campaign rule
