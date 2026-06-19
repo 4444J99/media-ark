@@ -1,12 +1,13 @@
 name: capture-automation-ci
 
-# Runner-pickup: 27+ confirmed failures across 5 falsified experiments
-# (hosted-runner 0-step 3s death; self-hosted queue-indefinite).
-# Diagnosis keyword: "runner-pickup" (greppable in code-search bots that
-# index .yml only). Full diagnosis anchors:
-#   MERGE_PATH.md         §"Post-merge runner-pickup hardening"   (line ~164)
-#   docs/SHIP_EVIDENCE.md §"Post-merge runner-pickup hardening"   (line ~92)
-# Last on-this-SHA run: 27222319216 (2026-06-09 16:59:41 UTC, cancelled).
+# The "CLI smoke" check (smoke-hosted) previously declared
+# `needs: smoke-self-hosted`, a diagnostic job pinned to
+# `runs-on: self-hosted`. No self-hosted runner is registered for this
+# repo, so that job never reached a terminal state; the dependent
+# smoke-hosted job therefore never started and the required "CLI smoke"
+# status check stayed pending forever, blocking every open PR. The
+# self-hosted diagnostic job has been removed and smoke-hosted now runs
+# directly on GitHub-hosted runners.
 
 on:
   workflow_dispatch:
@@ -14,21 +15,8 @@ on:
   pull_request:
 
 jobs:
-  smoke-self-hosted:
-    name: CLI smoke (self-hosted, optional)
-    runs-on: self-hosted
-    continue-on-error: true
-    timeout-minutes: 2
-    steps:
-      - name: Echo self-hosted marker
-        run: |
-          echo "running on self-hosted runner"
-          echo "RUNNER_NAME=${RUNNER_NAME:-unset}"
-
   smoke-hosted:
     name: CLI smoke
-    needs: smoke-self-hosted
-    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
