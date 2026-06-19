@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import mimetypes
 import os
 import sys
@@ -45,6 +46,8 @@ PUBLIC_API_ROUTES = {
     ("POST", "/api/auth/register"),
     ("POST", "/api/auth/login"),
 }
+
+_LOGGER = logging.getLogger("media_ark.api")
 
 
 class RequestValidationError(ValueError):
@@ -88,6 +91,8 @@ def _read_json_body(handler: BaseHTTPRequestHandler) -> Dict[str, Any]:
         length = int(length_header)
     except ValueError as exc:
         raise RequestValidationError("Content-Length must be an integer") from exc
+    if length < 0:
+        raise RequestValidationError("Content-Length must be non-negative")
     if length > MAX_JSON_BODY_BYTES:
         raise RequestValidationError(
             f"request body must be <= {MAX_JSON_BODY_BYTES} bytes"
@@ -333,7 +338,39 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(content)
 
+    def _handle_internal_error(self, method: str) -> None:
+        """Last-resort guard: log the failure and return a structured 500.
+
+        Any exception that escapes a dispatcher would otherwise leak a
+        Python traceback to the client (and, for some failures, a half
+        written response). We log with full context for operators and
+        reply with a generic JSON error so the surface never exposes
+        internals. The send itself is guarded because a response may
+        already be partially written when the error fired.
+        """
+        _LOGGER.exception("Unhandled error processing %s %s", method, self.path)
+        try:
+            _write_json(
+                self,
+                500,
+                {
+                    "ok": False,
+                    "error": "internal_error",
+                    "message": "internal server error",
+                },
+            )
+        except Exception:
+            _LOGGER.exception(
+                "Failed to send 500 response for %s %s", method, self.path
+            )
+
     def do_GET(self) -> None:
+        try:
+            self._dispatch_get()
+        except Exception:  # noqa: BLE001 - top-level request guard
+            self._handle_internal_error("GET")
+
+    def _dispatch_get(self) -> None:
         parsed = urlparse(self.path)
         if _is_api_path(parsed.path) and not self._authenticate_api_request(
             "GET", parsed.path
@@ -443,6 +480,12 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
         self._serve_static(parsed.path)
 
     def do_POST(self) -> None:
+        try:
+            self._dispatch_post()
+        except Exception:  # noqa: BLE001 - top-level request guard
+            self._handle_internal_error("POST")
+
+    def _dispatch_post(self) -> None:
         parsed = urlparse(self.path)
         route = parsed.path.rstrip("/")
         if _is_api_path(parsed.path) and not self._authenticate_api_request(
@@ -500,17 +543,29 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
         _write_json(self, 200, response)
 
     def log_message(self, fmt: str, *args) -> None:
-        if os.environ.get(env_key("VERBOSE")) == "1":
-            super().log_message(fmt, *args)
+        # Route the stdlib access log through structured logging so it
+        # shares the server's format and level. Kept at DEBUG so normal
+        # operation is quiet unless MEDIA_ARK_VERBOSE=1 raises the level.
+        _LOGGER.debug("%s - %s", self.address_string(), fmt % args)
 
 
 def make_handler() -> type[DashboardRequestHandler]:
     return DashboardRequestHandler
 
 
+def _configure_logging() -> None:
+    level = logging.DEBUG if os.environ.get(env_key("VERBOSE")) == "1" else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+
 def run_server(host: str = "127.0.0.1", port: int = 8787) -> None:
+    _configure_logging()
     handler_class = make_handler()
     server = ThreadingHTTPServer((host, port), handler_class)
+    _LOGGER.info("Capture platform server listening on http://%s:%s", host, port)
     print(f"Capture platform server listening on http://{host}:{port}")
     server.serve_forever()
 
