@@ -158,8 +158,8 @@ if [[ "$CHECK_SOURCE" == "1" ]]; then
     "${COMMON_ARGS[@]}" \
     --check-source \
     "$@" \
-    "${NO_OCR[@]}" \
-    "${NO_THUMBNAILS[@]}"
+    ${NO_OCR[@]+"${NO_OCR[@]}"} \
+    ${NO_THUMBNAILS[@]+"${NO_THUMBNAILS[@]}"}
 fi
 
 run_step_args=(
@@ -167,14 +167,14 @@ run_step_args=(
   --max-files "$MAX_FILES"
   --cleanup-state-days "$CLEANUP_STATE_DAYS"
 )
-run_step_args+=("${COPY_FLAG[@]}")
-run_step_args+=("${NO_OCR[@]}")
-run_step_args+=("${NO_THUMBNAILS[@]}")
+run_step_args+=(${COPY_FLAG[@]+"${COPY_FLAG[@]}"})
+run_step_args+=(${NO_OCR[@]+"${NO_OCR[@]}"})
+run_step_args+=(${NO_THUMBNAILS[@]+"${NO_THUMBNAILS[@]}"})
 if [[ "$CLEANUP_RAW" == "1" ]]; then
-  run_step_args+=("${CLEANUP_RAW_ARGS[@]}")
+  run_step_args+=(${CLEANUP_RAW_ARGS[@]+"${CLEANUP_RAW_ARGS[@]}"})
 fi
 if ((${#SELF_HEAL_ARGS[@]} > 0)); then
-  run_step_args+=("${SELF_HEAL_ARGS[@]}")
+  run_step_args+=(${SELF_HEAL_ARGS[@]+"${SELF_HEAL_ARGS[@]}"})
 fi
 run_step_args+=("$@")
 
