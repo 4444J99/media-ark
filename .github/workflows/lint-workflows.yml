@@ -1,7 +1,12 @@
 name: lint-workflows
 
-# Validates .github/workflows/*.yml structure on PRs that touch the
-# workflows directory. Closes the F3 structural gap: the prior F3
+# Validates .github/workflows/*.yml structure on every PR and push.
+# It previously filtered on `paths: .github/workflows/**`, which meant
+# the required "actionlint" check never ran on PRs that did not touch
+# the workflows directory, leaving those PRs stuck on a permanently
+# pending required check. The path filter has been removed so the
+# check always reports a conclusion. Closes the F3 structural gap:
+# the prior F3
 # fix in PR #10 strengthened *comment* anchors in automation-ci.yml,
 # but the yml syntax itself was not validated by any CI job. A future
 # PR that breaks the yml (invalid indentation, unknown fields,
@@ -18,10 +23,9 @@ name: lint-workflows
 # 1.7.8+ will not block this PR's CI.
 
 on:
+  workflow_dispatch:
+  push:
   pull_request:
-    paths:
-      - '.github/workflows/**'
-      - '.github/workflows/*.yml'
 
 jobs:
   lint-workflows:
