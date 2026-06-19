@@ -30,10 +30,31 @@ from .config import (  # noqa: E402
     validate_choice,
     validate_query,
 )
-from .runtime import load_snapshot, run_capture_action  # noqa: E402
+from .quota import (  # noqa: E402
+    DEFAULT_TIER,
+    QuotaExceeded,
+    QuotaStore,
+    directory_size,
+)
+from .runtime import _coerce_bool, load_snapshot, run_capture_action  # noqa: E402
 
 
 MAX_JSON_BODY_BYTES = 1_000_000
+
+# Modes that drive the capture pipeline and therefore run OCR (unless the
+# caller opts out with no_ocr). Used to decide whether a /api/run request
+# consumes an OCR call against the user's monthly budget.
+_OCR_MODES = {"process", "run", "once"}
+
+_QUOTA_STORE = QuotaStore()
+
+
+def _quota_store() -> QuotaStore:
+    return _QUOTA_STORE
+
+
+def _write_quota_error(handler: BaseHTTPRequestHandler, exc: QuotaExceeded) -> None:
+    _write_json(handler, 429, exc.to_payload())
 
 
 class RequestValidationError(ValueError):
@@ -144,6 +165,37 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
                 normalized[key] = value
         return normalized
 
+    def _identify_user(self) -> tuple[str, str]:
+        """Derive (user_id, tier) for the current request from headers.
+
+        The hosted edge is expected to set ``X-User-Id`` / ``X-User-Tier``
+        after authenticating; absent those, requests fall to a shared
+        ``anonymous`` user on the default tier.
+        """
+
+        user_id = (self.headers.get("X-User-Id") or "").strip() or "anonymous"
+        tier = (self.headers.get("X-User-Tier") or "").strip() or DEFAULT_TIER
+        return user_id, tier
+
+    def _enforce_quota(
+        self, *, api_calls: int = 1, ocr_calls: int = 0, storage_bytes: int | None = None
+    ) -> bool:
+        """Consume quota for this request; write a 429 and return False if over."""
+
+        user_id, tier = self._identify_user()
+        try:
+            _quota_store().consume(
+                user_id,
+                tier=tier,
+                api_calls=api_calls,
+                ocr_calls=ocr_calls,
+                storage_bytes=storage_bytes,
+            )
+        except QuotaExceeded as exc:
+            _write_quota_error(self, exc)
+            return False
+        return True
+
     def _serve_static(self, parsed_path: str) -> None:
         safe_name = parsed_path.lstrip("/")
         if not safe_name:
@@ -170,6 +222,23 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/quota"):
+            # Reading your own meter is free — it must not be the thing
+            # that pushes you over the call budget.
+            user_id, tier = self._identify_user()
+            usage = _quota_store().get_usage(user_id)
+            _write_json(
+                self,
+                200,
+                {
+                    "ok": True,
+                    "user": user_id,
+                    "tier": usage.tier or tier,
+                    "usage": usage.to_dict(),
+                },
+            )
+            return
+
         if parsed.path.startswith("/api/status"):
             query = self._read_query()
             try:
@@ -284,7 +353,36 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
         payload = to_action_payload("run", query=query, body=body, method="POST")
         action = str(payload.get("action", payload.get("mode", "process")))
         payload["mode"] = action
+
+        # OCR runs for the capture pipeline modes unless the caller opts
+        # out; charge an OCR call only when it will actually happen.
+        no_ocr = _coerce_bool(payload.get("no_ocr", payload.get("noOcr", False)))
+        ocr_calls = 1 if (action in _OCR_MODES and not no_ocr) else 0
+
+        # Measure the user's archive before running so an already-overflowing
+        # archive is rejected up front. Best-effort: a bad path is left to
+        # run_capture_action to validate and report as 400.
+        out_for_storage: int | None = None
+        try:
+            out_for_storage = directory_size(
+                normalize_platform_path(
+                    payload.get("out"), default=default_out_dir(), field="out"
+                )
+            )
+        except PlatformValidationError:
+            out_for_storage = None
+
+        if not self._enforce_quota(
+            api_calls=1, ocr_calls=ocr_calls, storage_bytes=out_for_storage
+        ):
+            return
+
         result = run_capture_action(payload)
+
+        # Reflect the post-run archive size so the next request sees it.
+        if result.ok and result.out:
+            user_id, _ = self._identify_user()
+            _quota_store().update_storage(user_id, directory_size(Path(result.out)))
         response: Dict[str, Any] = {
             "mode": action,
             "ok": result.ok,

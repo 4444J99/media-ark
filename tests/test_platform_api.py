@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import socket
 import subprocess
 import sys
@@ -10,6 +11,18 @@ import urllib.request
 from pathlib import Path
 import tempfile
 import unittest
+
+
+def _server_env(quota_dir: Path) -> dict:
+    """Env that isolates the quota ledger into a throwaway directory.
+
+    Keeps /api/run tests from accumulating usage in the repo's real
+    `.media-ark/quota.json` across runs.
+    """
+
+    env = dict(os.environ)
+    env["MEDIA_ARK_QUOTA_DB"] = str(quota_dir / "quota.json")
+    return env
 
 
 def _free_port() -> int:
@@ -144,6 +157,7 @@ class TestApiServer(unittest.TestCase):
                 [sys.executable, "-m", "src.platform.api_server", "--host", "127.0.0.1", "--port", str(port)],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                env=_server_env(out),
             )
             try:
                 _wait_for_api(port)
@@ -164,27 +178,29 @@ class TestApiServer(unittest.TestCase):
                 proc.wait(timeout=5)
 
     def test_api_rejects_paths_outside_allowed_roots(self) -> None:
-        port = _free_port()
-        proc = subprocess.Popen(
-            [sys.executable, "-m", "src.platform.api_server", "--host", "127.0.0.1", "--port", str(port)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        try:
-            _wait_for_api(port)
-            response = _read_json_allow_error(f"http://127.0.0.1:{port}/api/status?out=/etc")
-            self.assertFalse(response["ok"])
-            self.assertEqual(response["error"], "validation_error")
-
-            run_response = _post_json(
-                f"http://127.0.0.1:{port}/api/run",
-                {"action": "check-source", "source": "/etc", "out": "/etc"},
+        with tempfile.TemporaryDirectory() as tmpdir:
+            port = _free_port()
+            proc = subprocess.Popen(
+                [sys.executable, "-m", "src.platform.api_server", "--host", "127.0.0.1", "--port", str(port)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                env=_server_env(Path(tmpdir)),
             )
-            self.assertFalse(run_response["ok"])
-            self.assertEqual(run_response["error"], "validation_error")
-        finally:
-            proc.terminate()
-            proc.wait(timeout=5)
+            try:
+                _wait_for_api(port)
+                response = _read_json_allow_error(f"http://127.0.0.1:{port}/api/status?out=/etc")
+                self.assertFalse(response["ok"])
+                self.assertEqual(response["error"], "validation_error")
+
+                run_response = _post_json(
+                    f"http://127.0.0.1:{port}/api/run",
+                    {"action": "check-source", "source": "/etc", "out": "/etc"},
+                )
+                self.assertFalse(run_response["ok"])
+                self.assertEqual(run_response["error"], "validation_error")
+            finally:
+                proc.terminate()
+                proc.wait(timeout=5)
 
     def test_api_rejects_invalid_json_body(self) -> None:
         port = _free_port()
