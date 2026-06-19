@@ -30,6 +30,11 @@ from .config import (  # noqa: E402
     validate_choice,
     validate_query,
 )
+from .export import (  # noqa: E402
+    ExportError,
+    build_export,
+    extract_request_token,
+)
 from .runtime import load_snapshot, run_capture_action  # noqa: E402
 
 
@@ -62,6 +67,21 @@ def _write_json(
     handler.send_header("Cache-Control", "no-store")
     handler.end_headers()
     handler.wfile.write(encoded)
+
+
+def _write_download(
+    handler: BaseHTTPRequestHandler,
+    content: bytes,
+    content_type: str,
+    filename: str,
+) -> None:
+    handler.send_response(200)
+    handler.send_header("Content-Type", content_type)
+    handler.send_header("Content-Length", str(len(content)))
+    handler.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+    handler.send_header("Cache-Control", "no-store")
+    handler.end_headers()
+    handler.wfile.write(content)
 
 
 def _read_json_body(handler: BaseHTTPRequestHandler) -> Dict[str, Any]:
@@ -267,7 +287,33 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
             _write_json(self, 200, {"manifest": manifest_payload})
             return
 
+        if parsed.path.startswith("/api/export/"):
+            self._handle_export(parsed.path)
+            return
+
         self._serve_static(parsed.path)
+
+    def _handle_export(self, raw_path: str) -> None:
+        fmt = raw_path[len("/api/export/"):].strip("/").lower()
+        query = self._read_query()
+        try:
+            out = normalize_platform_path(
+                query.get("out"), default=default_out_dir(), field="out"
+            )
+        except PlatformValidationError as exc:
+            _write_validation_error(self, str(exc))
+            return
+        token = extract_request_token(self.headers, query)
+        try:
+            content, content_type, filename = build_export(fmt, out, token=token)
+        except ExportError as exc:
+            _write_json(
+                self,
+                exc.status,
+                {"ok": False, "error": exc.error, "message": exc.message},
+            )
+            return
+        _write_download(self, content, content_type, filename)
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
