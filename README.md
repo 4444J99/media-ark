@@ -112,10 +112,15 @@ python3 -m src.platform.api_server --host 127.0.0.1 --port 8787
 ```
 
 - Open `http://127.0.0.1:8787/` for the dashboard.
+- Register or log in with `POST /api/auth/register` or `POST /api/auth/login`.
+- Send `Authorization: Bearer <api_key>` on protected `/api/*` requests.
 - `GET /api/status?source=<path>&out=<path>`
 - `GET /api/manifest?out=<path>`
 - `GET /api/index?out=<path>&limit=<n>&status=<all|processed|duplicate>&media=<all|image|video|document>`
 - `POST /api/run` with JSON `{"action":"process|check-source|verify|repair|query","source":"...","out":"..."}`
+
+Local HTTP users are stored in `~/.media-ark/users.db`; each user gets a sandbox
+under `~/.media-ark/users/<username>` for API source/output paths.
 
 ### MCP (stdio)
 

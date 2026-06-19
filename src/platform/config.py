@@ -81,23 +81,35 @@ def is_path_allowed(path: Path, roots: Optional[List[Path]] = None) -> bool:
     return False
 
 
-def normalize_platform_path(value: Any, *, default: Path, field: str) -> Path:
+def normalize_platform_path(
+    value: Any,
+    *,
+    default: Path,
+    field: str,
+    roots: Optional[List[Path]] = None,
+) -> Path:
     raw = str(value or default).strip()
     if not raw:
         raise PlatformValidationError(f"{field} path is required")
     if "\x00" in raw:
         raise PlatformValidationError(f"{field} path contains a null byte")
     path = Path(raw).expanduser().resolve()
-    if not is_path_allowed(path):
-        roots = ", ".join(str(root) for root in allowed_roots())
-        raise PlatformValidationError(f"{field} path is outside allowed roots: {roots}")
+    allowed = roots or allowed_roots()
+    if not is_path_allowed(path, allowed):
+        root_list = ", ".join(str(root) for root in allowed)
+        raise PlatformValidationError(f"{field} path is outside allowed roots: {root_list}")
     return path
 
 
-def normalize_optional_platform_path(value: Any, *, field: str) -> Optional[Path]:
+def normalize_optional_platform_path(
+    value: Any,
+    *,
+    field: str,
+    roots: Optional[List[Path]] = None,
+) -> Optional[Path]:
     if value in (None, ""):
         return None
-    return normalize_platform_path(value, default=repo_root(), field=field)
+    return normalize_platform_path(value, default=repo_root(), field=field, roots=roots)
 
 
 def coerce_int(

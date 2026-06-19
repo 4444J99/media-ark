@@ -42,9 +42,39 @@ Direct server entrypoint:
 python3 -m src.platform.api_server --host 127.0.0.1 --port 8787
 ```
 
+### Authentication
+
+The HTTP API stores local users in SQLite at `~/.media-ark/users.db` by default.
+Override with `MEDIA_ARK_USERS_DB` when running tests or deployments.
+Per-user sandboxes default to `~/.media-ark/users/<username>`; override the
+root with `MEDIA_ARK_USER_SANDBOX_ROOT`.
+
+- `POST /api/auth/register` creates a user, a per-user sandbox, and an API key.
+- `POST /api/auth/login` verifies the password and rotates the API key.
+- `POST /api/auth/api-key` rotates the API key for the bearer-authenticated user.
+- All other `/api/*` requests require `Authorization: Bearer <api_key>`.
+
+Register:
+
+```bash
+curl -s http://127.0.0.1:8787/api/auth/register \
+  -H 'content-type: application/json' \
+  -d '{"username":"localuser","password":"change-me-please"}'
+```
+
+Use the returned `api_key`:
+
+```bash
+curl -s http://127.0.0.1:8787/api/status \
+  -H "Authorization: Bearer $MEDIA_ARK_API_KEY"
+```
+
 ### Runtime security boundary
 
-API and MCP paths are accepted only under configured allowed roots.
+API and MCP paths are accepted only under configured allowed roots. Authenticated
+HTTP API requests are further restricted to the authenticated user's sandbox;
+when no `source` or `out` is supplied, the API defaults to `<sandbox>/source`
+and `<sandbox>/out`.
 
 - Default allowed roots: the repository root and the OS temporary directory.
 - Override with `MEDIA_ARK_ALLOWED_ROOTS`, using the platform path separator (`:` on macOS/Linux).

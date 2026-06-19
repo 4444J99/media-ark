@@ -15,6 +15,25 @@
 
     <section class="grid">
       <article class="card">
+        <h2>Account</h2>
+        <div class="row">
+          <label for="authUsername">Username</label>
+          <input id="authUsername" autocomplete="username" />
+        </div>
+        <div class="row">
+          <label for="authPassword">Password</label>
+          <input id="authPassword" type="password" autocomplete="current-password" />
+        </div>
+        <div class="btn-row">
+          <button data-action="register">Register</button>
+          <button data-action="login">Login</button>
+          <button data-action="rotate-api-key">API Key</button>
+          <button data-action="sign-out">Sign Out</button>
+        </div>
+        <p><strong>Status:</strong> <span id="authStatus">-</span></p>
+      </article>
+
+      <article class="card">
         <h2>Pipeline Controls</h2>
         <div class="row">
           <label for="sourcePath">Source</label>
