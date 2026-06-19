@@ -14,21 +14,8 @@ on:
   pull_request:
 
 jobs:
-  smoke-self-hosted:
-    name: CLI smoke (self-hosted, optional)
-    runs-on: self-hosted
-    continue-on-error: true
-    timeout-minutes: 2
-    steps:
-      - name: Echo self-hosted marker
-        run: |
-          echo "running on self-hosted runner"
-          echo "RUNNER_NAME=${RUNNER_NAME:-unset}"
-
   smoke-hosted:
     name: CLI smoke
-    needs: smoke-self-hosted
-    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
