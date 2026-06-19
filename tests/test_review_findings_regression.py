@@ -83,7 +83,7 @@ def _wait_for_api(port: int, attempts: int = 30) -> None:
     for _ in range(attempts):
         try:
             with urllib.request.urlopen(
-                f"http://127.0.0.1:{port}/api/status"
+                f"http://127.0.0.1:{port}/"
             ) as response:
                 if response.status == 200:
                     return
@@ -92,6 +92,34 @@ def _wait_for_api(port: int, attempts: int = 30) -> None:
 
             time.sleep(0.1)
     raise AssertionError("api did not become ready")
+
+
+def _api_env(root: Path) -> dict[str, str]:
+    env = os.environ.copy()
+    env["MEDIA_ARK_USERS_DB"] = str(root / "users.db")
+    env["MEDIA_ARK_USER_SANDBOX_ROOT"] = str(root / "sandboxes")
+    return env
+
+
+def _post_json(url: str, payload: dict, token: str | None = None) -> dict:
+    data = json.dumps(payload).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(url, data=data, method="POST", headers=headers)
+    with urllib.request.urlopen(request) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _register_user(port: int) -> dict:
+    return _post_json(
+        f"http://127.0.0.1:{port}/api/auth/register",
+        {"username": "tester", "password": "correct horse battery"},
+    )
+
+
+def _auth_request(url: str, token: str) -> urllib.request.Request:
+    return urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
 
 
 class TestReviewFindingsRegression(unittest.TestCase):
@@ -183,23 +211,7 @@ class TestReviewFindingsRegression(unittest.TestCase):
 
     def test_5_api_index_filters_applied_before_limit(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            out = Path(tmpdir) / "out"
-            out.mkdir()
-            index_file = out / "index.jsonl"
-            rows = []
-            for i in range(5):
-                rows.append(
-                    {
-                        "status": "processed",
-                        "media_type": "image",
-                        "path": f"img-{i}.png",
-                        "text": "alpha" if i % 2 else "beta",
-                    }
-                )
-            index_file.write_text(
-                "\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8"
-            )
-
+            tmp = Path(tmpdir)
             port = _free_port()
             proc = subprocess.Popen(
                 [
@@ -213,11 +225,33 @@ class TestReviewFindingsRegression(unittest.TestCase):
                 ],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                env=_api_env(tmp / "auth"),
             )
             try:
                 _wait_for_api(port)
+                auth = _register_user(port)
+                token = auth["api_key"]
+                out = Path(auth["out"])
+                index_file = out / "index.jsonl"
+                rows = []
+                for i in range(5):
+                    rows.append(
+                        {
+                            "status": "processed",
+                            "media_type": "image",
+                            "path": f"img-{i}.png",
+                            "text": "alpha" if i % 2 else "beta",
+                        }
+                    )
+                index_file.write_text(
+                    "\n".join(json.dumps(row) for row in rows) + "\n",
+                    encoding="utf-8",
+                )
                 with urllib.request.urlopen(
-                    f"http://127.0.0.1:{port}/api/index?out={out}&query=beta&limit=1&status=all&media=all"
+                    _auth_request(
+                        f"http://127.0.0.1:{port}/api/index?out={out}&query=beta&limit=1&status=all&media=all",
+                        token,
+                    )
                 ) as response:
                     payload = json.loads(response.read().decode("utf-8"))
             finally:

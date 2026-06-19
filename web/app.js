@@ -1,6 +1,7 @@
 const state = {
-  defaultSource: 'data/captures/raw',
-  defaultOut: '.media-ark',
+  apiKey: localStorage.getItem('mediaArkApiKey') || '',
+  defaultSource: localStorage.getItem('mediaArkSource') || 'data/captures/raw',
+  defaultOut: localStorage.getItem('mediaArkOut') || '.media-ark',
 };
 
 function el(selector) {
@@ -8,9 +9,16 @@ function el(selector) {
 }
 
 async function requestJson(url, options = {}) {
+  const headers = {
+    'content-type': 'application/json',
+    ...(options.headers || {}),
+  };
+  if (state.apiKey && !headers.Authorization) {
+    headers.Authorization = `Bearer ${state.apiKey}`;
+  }
   const response = await fetch(url, {
-    headers: { 'content-type': 'application/json' },
     ...options,
+    headers,
   });
   const payload = await response.json();
   if (!response.ok) {
@@ -45,8 +53,64 @@ function renderLastRun(payload) {
   el('#lastRun').textContent = JSON.stringify(payload, null, 2);
 }
 
+function renderAuthStatus(text) {
+  const target = el('#authStatus');
+  if (target) {
+    target.textContent = text;
+  }
+}
+
 function onError(error) {
   el('#lastRun').textContent = `${new Date().toISOString()}\n${String(error.message || error)}`;
+}
+
+function applyAuth(payload) {
+  state.apiKey = payload.api_key || state.apiKey;
+  state.defaultSource = payload.source || state.defaultSource;
+  state.defaultOut = payload.out || state.defaultOut;
+  localStorage.setItem('mediaArkApiKey', state.apiKey);
+  localStorage.setItem('mediaArkSource', state.defaultSource);
+  localStorage.setItem('mediaArkOut', state.defaultOut);
+  el('#sourcePath').value = state.defaultSource;
+  el('#outPath').value = state.defaultOut;
+  renderAuthStatus(`Signed in as ${payload.user?.username || 'user'}`);
+}
+
+function authPayload() {
+  return {
+    username: el('#authUsername').value.trim(),
+    password: el('#authPassword').value,
+  };
+}
+
+async function registerAccount() {
+  const payload = await requestJson('/api/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(authPayload()),
+  });
+  applyAuth(payload);
+  await refreshStatus();
+}
+
+async function loginAccount() {
+  const payload = await requestJson('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(authPayload()),
+  });
+  applyAuth(payload);
+  await refreshStatus();
+}
+
+async function rotateApiKey() {
+  const payload = await requestJson('/api/auth/api-key', { method: 'POST' });
+  applyAuth(payload);
+  renderLastRun({ ok: true, api_key_rotated: true, user: payload.user });
+}
+
+function signOut() {
+  state.apiKey = '';
+  localStorage.removeItem('mediaArkApiKey');
+  renderAuthStatus('Signed out');
 }
 
 async function refreshStatus() {
@@ -110,6 +174,22 @@ function bindActions() {
       return;
     }
     event.preventDefault();
+    if (action === 'register') {
+      registerAccount().catch(onError);
+      return;
+    }
+    if (action === 'login') {
+      loginAccount().catch(onError);
+      return;
+    }
+    if (action === 'rotate-api-key') {
+      rotateApiKey().catch(onError);
+      return;
+    }
+    if (action === 'sign-out') {
+      signOut();
+      return;
+    }
     if (action === 'check') {
       runAction('check-source').catch(onError);
       return;
@@ -134,9 +214,16 @@ function bindActions() {
 }
 
 async function bootstrap() {
+  el('#sourcePath').value = state.defaultSource;
+  el('#outPath').value = state.defaultOut;
   bindActions();
-  await refreshStatus();
-  await refreshIndex().catch(() => {});
+  if (state.apiKey) {
+    renderAuthStatus('Signed in');
+    await refreshStatus();
+    await refreshIndex().catch(() => {});
+  } else {
+    renderAuthStatus('Signed out');
+  }
   setInterval(() => refreshStatus().catch(() => {}), 8000);
 }
 

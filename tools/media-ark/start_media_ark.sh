@@ -19,6 +19,8 @@ Environment:
   MEDIA_ARK_PORT (default: 8787)
   MEDIA_ARK_SOURCE (default: data/captures/raw)
   MEDIA_ARK_OUT (default: .media-ark)
+  MEDIA_ARK_USERS_DB (default: ~/.media-ark/users.db)
+  MEDIA_ARK_USER_SANDBOX_ROOT (default: ~/.media-ark/users)
   MEDIA_ARK_MCP_PREFLIGHT (0/1, default: 1)
 
 Examples:

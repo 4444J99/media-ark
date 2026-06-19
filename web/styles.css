@@ -44,9 +44,11 @@ header {
 
 .row input[type="text"],
 .row input[type="number"],
+.row input[type="password"],
 select,
 input[type="text"],
-input[type="number"] {
+input[type="number"],
+input[type="password"] {
   width: 100%;
   padding: 8px 10px;
   border-radius: 8px;

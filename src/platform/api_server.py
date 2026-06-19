@@ -9,7 +9,7 @@ import os
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from urllib.parse import parse_qs, urlparse
 
 # Ensure the `media_ark` brand module is importable when this file is
@@ -21,6 +21,13 @@ if str(_SRC) not in sys.path:
 
 from media_ark import BRAND_SERVER_VERSION, env_key  # noqa: E402
 
+from .auth import (  # noqa: E402
+    AuthConflictError,
+    AuthCredentialsError,
+    AuthError,
+    AuthStore,
+    AuthUser,
+)
 from .config import (  # noqa: E402
     PlatformValidationError,
     coerce_int,
@@ -34,6 +41,10 @@ from .runtime import load_snapshot, run_capture_action  # noqa: E402
 
 
 MAX_JSON_BODY_BYTES = 1_000_000
+PUBLIC_API_ROUTES = {
+    ("POST", "/api/auth/register"),
+    ("POST", "/api/auth/login"),
+}
 
 
 class RequestValidationError(ValueError):
@@ -53,13 +64,18 @@ def _json(value: Dict[str, Any]) -> str:
 
 
 def _write_json(
-    handler: BaseHTTPRequestHandler, status: int, payload: Dict[str, Any]
+    handler: BaseHTTPRequestHandler,
+    status: int,
+    payload: Dict[str, Any],
+    headers: Optional[Dict[str, str]] = None,
 ) -> None:
     encoded = _json(payload).encode("utf-8")
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json; charset=utf-8")
     handler.send_header("Content-Length", str(len(encoded)))
     handler.send_header("Cache-Control", "no-store")
+    for key, value in (headers or {}).items():
+        handler.send_header(key, value)
     handler.end_headers()
     handler.wfile.write(encoded)
 
@@ -96,7 +112,11 @@ def _to_int(value: Any, default: int) -> int:
 
 
 def to_action_payload(
-    path: str, query: Dict[str, Any], method: str, body: Dict[str, Any]
+    path: str,
+    query: Dict[str, Any],
+    method: str,
+    body: Dict[str, Any],
+    user: Optional[AuthUser] = None,
 ) -> Dict[str, Any]:
     if method.upper() == "GET":
         payload = dict(query)
@@ -104,20 +124,45 @@ def to_action_payload(
         payload = dict(query)
         for key, value in body.items():
             payload[key] = value
+    default_source, default_out = _default_paths_for_user(user)
     if "source" not in payload:
-        payload.setdefault("source", str(default_source_dir()))
+        payload.setdefault("source", str(default_source))
     if "out" not in payload:
-        payload.setdefault("out", str(default_out_dir()))
+        payload.setdefault("out", str(default_out))
     payload.setdefault("mode", path.lstrip("/").split("/")[-1])
     return payload
 
 
-def _validated_paths(query: Dict[str, Any]) -> tuple[Path, Path]:
+def _is_api_path(path: str) -> bool:
+    return path == "/api" or path.startswith("/api/")
+
+
+def _normalized_route(path: str) -> str:
+    return path.rstrip("/") or "/"
+
+
+def _default_paths_for_user(user: Optional[AuthUser]) -> tuple[Path, Path]:
+    if user is None:
+        return default_source_dir(), default_out_dir()
+    return user.sandbox / "source", user.sandbox / "out"
+
+
+def _auth_roots(user: Optional[AuthUser]) -> Optional[list[Path]]:
+    if user is None:
+        return None
+    return [user.sandbox]
+
+
+def _validated_paths(
+    query: Dict[str, Any], user: Optional[AuthUser] = None
+) -> tuple[Path, Path]:
+    default_source, default_out = _default_paths_for_user(user)
+    roots = _auth_roots(user)
     source = normalize_platform_path(
-        query.get("source"), default=default_source_dir(), field="source"
+        query.get("source"), default=default_source, field="source", roots=roots
     )
     out = normalize_platform_path(
-        query.get("out"), default=default_out_dir(), field="out"
+        query.get("out"), default=default_out, field="out", roots=roots
     )
     return source, out
 
@@ -128,8 +173,128 @@ def _write_validation_error(handler: BaseHTTPRequestHandler, message: str) -> No
     )
 
 
+def _auth_response_payload(user: AuthUser, api_key: Optional[str] = None) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "ok": True,
+        "user": {"id": user.id, "username": user.username},
+        "sandbox": str(user.sandbox),
+        "source": str(user.sandbox / "source"),
+        "out": str(user.sandbox / "out"),
+    }
+    if api_key is not None:
+        payload["api_key"] = api_key
+    return payload
+
+
 class DashboardRequestHandler(BaseHTTPRequestHandler):
     server_version = BRAND_SERVER_VERSION
+    auth_user: Optional[AuthUser] = None
+
+    def _auth_store(self) -> AuthStore:
+        store = getattr(self.server, "auth_store", None)
+        if store is None:
+            store = AuthStore()
+            setattr(self.server, "auth_store", store)
+        return store
+
+    def _write_auth_required(self, message: str = "missing bearer token") -> None:
+        _write_json(
+            self,
+            401,
+            {"ok": False, "error": "unauthorized", "message": message},
+            headers={"WWW-Authenticate": 'Bearer realm="media-ark"'},
+        )
+
+    def _authenticate_api_request(self, method: str, path: str) -> bool:
+        self.auth_user = None
+        route = _normalized_route(path)
+        if (method.upper(), route) in PUBLIC_API_ROUTES:
+            return True
+
+        authorization = self.headers.get("Authorization", "")
+        scheme, _, token = authorization.partition(" ")
+        if scheme.lower() != "bearer" or not token.strip():
+            self._write_auth_required()
+            return False
+
+        user = self._auth_store().authenticate_api_key(token.strip())
+        if user is None:
+            self._write_auth_required("invalid bearer token")
+            return False
+
+        self.auth_user = user
+        return True
+
+    def _read_auth_body(self) -> Dict[str, Any]:
+        body = _read_json_body(self)
+        if "username" not in body or "password" not in body:
+            raise RequestValidationError("username and password are required")
+        return body
+
+    def _handle_register(self) -> None:
+        try:
+            body = self._read_auth_body()
+            user, api_key = self._auth_store().register(
+                body.get("username"), body.get("password")
+            )
+        except RequestValidationError as exc:
+            _write_validation_error(self, str(exc))
+            return
+        except AuthConflictError as exc:
+            _write_json(
+                self,
+                409,
+                {"ok": False, "error": exc.error, "message": str(exc)},
+            )
+            return
+        except AuthError as exc:
+            _write_json(
+                self,
+                400,
+                {"ok": False, "error": exc.error, "message": str(exc)},
+            )
+            return
+        _write_json(self, 201, _auth_response_payload(user, api_key))
+
+    def _handle_login(self) -> None:
+        try:
+            body = self._read_auth_body()
+            user, api_key = self._auth_store().login(
+                body.get("username"), body.get("password")
+            )
+        except RequestValidationError as exc:
+            _write_validation_error(self, str(exc))
+            return
+        except AuthCredentialsError as exc:
+            _write_json(
+                self,
+                401,
+                {"ok": False, "error": exc.error, "message": str(exc)},
+            )
+            return
+        except AuthError as exc:
+            _write_json(
+                self,
+                400,
+                {"ok": False, "error": exc.error, "message": str(exc)},
+            )
+            return
+        _write_json(self, 200, _auth_response_payload(user, api_key))
+
+    def _handle_api_key(self) -> None:
+        if self.auth_user is None:
+            self._write_auth_required()
+            return
+        try:
+            user, api_key = self._auth_store().rotate_api_key(self.auth_user.id)
+        except AuthError as exc:
+            _write_json(
+                self,
+                401,
+                {"ok": False, "error": exc.error, "message": str(exc)},
+            )
+            return
+        _write_json(self, 200, _auth_response_payload(user, api_key))
 
     def _read_query(self) -> Dict[str, Any]:
         parsed = urlparse(self.path)
@@ -170,10 +335,15 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+        if _is_api_path(parsed.path) and not self._authenticate_api_request(
+            "GET", parsed.path
+        ):
+            return
+
         if parsed.path.startswith("/api/status"):
             query = self._read_query()
             try:
-                source, out = _validated_paths(query)
+                source, out = _validated_paths(query, self.auth_user)
             except PlatformValidationError as exc:
                 _write_validation_error(self, str(exc))
                 return
@@ -190,7 +360,7 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/api/index"):
             query = self._read_query()
             try:
-                _, out = _validated_paths(query)
+                _, out = _validated_paths(query, self.auth_user)
                 limit = coerce_int(
                     query.get("limit", 25),
                     field="limit",
@@ -258,7 +428,10 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
             query = self._read_query()
             try:
                 out = normalize_platform_path(
-                    query.get("out"), default=default_out_dir(), field="out"
+                    query.get("out"),
+                    default=_default_paths_for_user(self.auth_user)[1],
+                    field="out",
+                    roots=_auth_roots(self.auth_user),
                 )
             except PlatformValidationError as exc:
                 _write_validation_error(self, str(exc))
@@ -272,6 +445,23 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
         route = parsed.path.rstrip("/")
+        if _is_api_path(parsed.path) and not self._authenticate_api_request(
+            "POST", parsed.path
+        ):
+            return
+
+        if route == "/api/auth/register":
+            self._handle_register()
+            return
+
+        if route == "/api/auth/login":
+            self._handle_login()
+            return
+
+        if route == "/api/auth/api-key":
+            self._handle_api_key()
+            return
+
         if route != "/api/run":
             self.send_error(404, "not found")
             return
@@ -281,10 +471,12 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
             _write_validation_error(self, str(exc))
             return
         query = self._read_query()
-        payload = to_action_payload("run", query=query, body=body, method="POST")
+        payload = to_action_payload(
+            "run", query=query, body=body, method="POST", user=self.auth_user
+        )
         action = str(payload.get("action", payload.get("mode", "process")))
         payload["mode"] = action
-        result = run_capture_action(payload)
+        result = run_capture_action(payload, roots=_auth_roots(self.auth_user))
         response: Dict[str, Any] = {
             "mode": action,
             "ok": result.ok,
