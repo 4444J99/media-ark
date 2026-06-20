@@ -200,7 +200,7 @@ def _wait_for_api(port: int, attempts: int = 30) -> None:
     for _ in range(attempts):
         try:
             with urllib.request.urlopen(
-                f"http://127.0.0.1:{port}/api/status"
+                f"http://127.0.0.1:{port}/"
             ) as response:
                 if response.status == 200:
                     return

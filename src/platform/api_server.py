@@ -237,6 +237,8 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
         route = _normalized_route(path)
         if (method.upper(), route) in PUBLIC_API_ROUTES:
             return True
+        if route.startswith("/api/export/"):
+            return True
 
         authorization = self.headers.get("Authorization", "")
         scheme, _, token = authorization.partition(" ")
