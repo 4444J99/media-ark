@@ -164,6 +164,13 @@ def _is_api_path(path: str) -> bool:
     return path == "/api" or path.startswith("/api/")
 
 
+def _is_public_api_request(method: str, path: str) -> bool:
+    route = _normalized_route(path)
+    if (method.upper(), route) in PUBLIC_API_ROUTES:
+        return True
+    return method.upper() == "GET" and route.startswith("/api/export/")
+
+
 def _normalized_route(path: str) -> str:
     return path.rstrip("/") or "/"
 
@@ -234,8 +241,7 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
 
     def _authenticate_api_request(self, method: str, path: str) -> bool:
         self.auth_user = None
-        route = _normalized_route(path)
-        if (method.upper(), route) in PUBLIC_API_ROUTES:
+        if _is_public_api_request(method, path):
             return True
 
         authorization = self.headers.get("Authorization", "")
