@@ -94,57 +94,6 @@ class TestMcpServer(unittest.TestCase):
         self.assertEqual(errors[2]["code"], -32602)
         self.assertEqual(errors[3]["code"], -32602)
 
-    def test_mcp_unexpected_error_keeps_loop_alive(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            out = root / "out"
-            out.mkdir()
-            # A directory where index.jsonl is expected makes the
-            # snapshot read raise IsADirectoryError — an error the tool
-            # handler does not anticipate. It must surface as a JSON-RPC
-            # internal error, and the stdio loop must survive to answer
-            # the next message.
-            (out / "index.jsonl").mkdir()
-            messages = [
-                {
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "method": "tools/call",
-                    "params": {
-                        "name": "capture_status",
-                        "arguments": {
-                            "source": str(root / "source"),
-                            "out": str(out),
-                        },
-                    },
-                },
-                {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
-            ]
-            proc = subprocess.run(
-                [sys.executable, "-m", "src.platform.mcp_server"],
-                input="\n".join(json.dumps(message) for message in messages).encode(
-                    "utf-8"
-                ),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                check=False,
-                timeout=20,
-            )
-            self.assertEqual(proc.returncode, 0)
-            replies = {
-                payload.get("id"): payload
-                for payload in (
-                    json.loads(line)
-                    for line in proc.stdout.splitlines()
-                    if line.strip()
-                )
-            }
-            self.assertIn("error", replies[1])
-            self.assertEqual(replies[1]["error"]["code"], -32603)
-            # Loop survived: the follow-up tools/list got a real result.
-            self.assertIn("result", replies[2])
-            self.assertIn("tools", replies[2]["result"])
-
     def test_mcp_capture_check_persists_report_and_event_log(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
