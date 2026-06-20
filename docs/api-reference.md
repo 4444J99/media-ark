@@ -109,32 +109,6 @@ The event/report paths can be overridden with `event_log`/`eventLog` and `report
 - `GET /api/index?source=<source>&out=<out>&limit=<n>&status=<all|processed|duplicate>&media=<all|image|video|document>`
   - returns filtered recent index records.
 
-### Export endpoints (pro tier)
-
-- `GET /api/export/csv?out=<out>` — the index (`index.jsonl`) flattened to CSV.
-- `GET /api/export/zip?out=<out>` — `manifest.json` plus every OCR sidecar, bundled into a zip.
-- `GET /api/export/json?out=<out>` — the full archive (manifest + index rows + summary) as one JSON document.
-
-All three return a downloadable file (`Content-Disposition: attachment`).
-
-Export is gated behind the pro tier and is ownership-checked:
-
-- Configure authorized tokens with `MEDIA_ARK_PRO_TOKENS`, a comma/newline-separated
-  list of `token` or `token:principal` entries (a bare token uses itself as the principal).
-- Callers present their token via `Authorization: Bearer <token>`, `X-Api-Key: <token>`,
-  or a `token` query parameter.
-- Responses: `403 pro_tier_required` (no tokens configured or token not authorized),
-  `401 missing_token` (no token supplied), `403 ownership_denied` (the archive's
-  `manifest.json` records an `owner` that does not match the caller's principal),
-  `404 unknown_format` (format other than `csv`/`zip`/`json`). An archive with no
-  recorded `owner` is exportable by any authorized pro caller.
-
-```bash
-MEDIA_ARK_PRO_TOKENS="s3cret:alice" npm run platform:start
-curl -OJ -H "Authorization: Bearer s3cret" \
-  "http://127.0.0.1:8787/api/export/zip?out=.media-ark"
-```
-
 ### POST endpoint
 
 - `POST /api/run`
