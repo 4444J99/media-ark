@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import logging
 import mimetypes
 import os
 import sys
@@ -35,17 +34,10 @@ from .config import (  # noqa: E402
     default_out_dir,
     default_source_dir,
     normalize_platform_path,
-    pro_enabled,
     validate_choice,
     validate_query,
 )
-from .export import (  # noqa: E402
-    ExportError,
-    build_export,
-    extract_request_token,
-)
 from .runtime import load_snapshot, run_capture_action  # noqa: E402
-from .sync import sync_status  # noqa: E402
 
 
 MAX_JSON_BODY_BYTES = 1_000_000
@@ -53,8 +45,6 @@ PUBLIC_API_ROUTES = {
     ("POST", "/api/auth/register"),
     ("POST", "/api/auth/login"),
 }
-
-_LOGGER = logging.getLogger("media_ark.api")
 
 
 class RequestValidationError(ValueError):
@@ -90,21 +80,6 @@ def _write_json(
     handler.wfile.write(encoded)
 
 
-def _write_download(
-    handler: BaseHTTPRequestHandler,
-    content: bytes,
-    content_type: str,
-    filename: str,
-) -> None:
-    handler.send_response(200)
-    handler.send_header("Content-Type", content_type)
-    handler.send_header("Content-Length", str(len(content)))
-    handler.send_header("Content-Disposition", f'attachment; filename="{filename}"')
-    handler.send_header("Cache-Control", "no-store")
-    handler.end_headers()
-    handler.wfile.write(content)
-
-
 def _read_json_body(handler: BaseHTTPRequestHandler) -> Dict[str, Any]:
     length_header = handler.headers.get("Content-Length")
     if not length_header:
@@ -113,8 +88,6 @@ def _read_json_body(handler: BaseHTTPRequestHandler) -> Dict[str, Any]:
         length = int(length_header)
     except ValueError as exc:
         raise RequestValidationError("Content-Length must be an integer") from exc
-    if length < 0:
-        raise RequestValidationError("Content-Length must be non-negative")
     if length > MAX_JSON_BODY_BYTES:
         raise RequestValidationError(
             f"request body must be <= {MAX_JSON_BODY_BYTES} bytes"
@@ -360,39 +333,7 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(content)
 
-    def _handle_internal_error(self, method: str) -> None:
-        """Last-resort guard: log the failure and return a structured 500.
-
-        Any exception that escapes a dispatcher would otherwise leak a
-        Python traceback to the client (and, for some failures, a half
-        written response). We log with full context for operators and
-        reply with a generic JSON error so the surface never exposes
-        internals. The send itself is guarded because a response may
-        already be partially written when the error fired.
-        """
-        _LOGGER.exception("Unhandled error processing %s %s", method, self.path)
-        try:
-            _write_json(
-                self,
-                500,
-                {
-                    "ok": False,
-                    "error": "internal_error",
-                    "message": "internal server error",
-                },
-            )
-        except Exception:
-            _LOGGER.exception(
-                "Failed to send 500 response for %s %s", method, self.path
-            )
-
     def do_GET(self) -> None:
-        try:
-            self._dispatch_get()
-        except Exception:  # noqa: BLE001 - top-level request guard
-            self._handle_internal_error("GET")
-
-    def _dispatch_get(self) -> None:
         parsed = urlparse(self.path)
         if _is_api_path(parsed.path) and not self._authenticate_api_request(
             "GET", parsed.path
@@ -411,8 +352,6 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
                 "api_version": "1.0",
                 "source": str(source),
                 "out": str(out),
-                "pro": pro_enabled(),
-                "sync": sync_status(),
             }
             status.update(load_snapshot(out))
             _write_json(self, 200, status)
@@ -501,41 +440,9 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
             _write_json(self, 200, {"manifest": manifest_payload})
             return
 
-        if parsed.path.startswith("/api/export/"):
-            self._handle_export(parsed.path)
-            return
-
         self._serve_static(parsed.path)
 
-    def _handle_export(self, raw_path: str) -> None:
-        fmt = raw_path[len("/api/export/"):].strip("/").lower()
-        query = self._read_query()
-        try:
-            out = normalize_platform_path(
-                query.get("out"), default=default_out_dir(), field="out"
-            )
-        except PlatformValidationError as exc:
-            _write_validation_error(self, str(exc))
-            return
-        token = extract_request_token(self.headers, query)
-        try:
-            content, content_type, filename = build_export(fmt, out, token=token)
-        except ExportError as exc:
-            _write_json(
-                self,
-                exc.status,
-                {"ok": False, "error": exc.error, "message": exc.message},
-            )
-            return
-        _write_download(self, content, content_type, filename)
-
     def do_POST(self) -> None:
-        try:
-            self._dispatch_post()
-        except Exception:  # noqa: BLE001 - top-level request guard
-            self._handle_internal_error("POST")
-
-    def _dispatch_post(self) -> None:
         parsed = urlparse(self.path)
         route = parsed.path.rstrip("/")
         if _is_api_path(parsed.path) and not self._authenticate_api_request(
@@ -593,29 +500,17 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
         _write_json(self, 200, response)
 
     def log_message(self, fmt: str, *args) -> None:
-        # Route the stdlib access log through structured logging so it
-        # shares the server's format and level. Kept at DEBUG so normal
-        # operation is quiet unless MEDIA_ARK_VERBOSE=1 raises the level.
-        _LOGGER.debug("%s - %s", self.address_string(), fmt % args)
+        if os.environ.get(env_key("VERBOSE")) == "1":
+            super().log_message(fmt, *args)
 
 
 def make_handler() -> type[DashboardRequestHandler]:
     return DashboardRequestHandler
 
 
-def _configure_logging() -> None:
-    level = logging.DEBUG if os.environ.get(env_key("VERBOSE")) == "1" else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
-
-
 def run_server(host: str = "127.0.0.1", port: int = 8787) -> None:
-    _configure_logging()
     handler_class = make_handler()
     server = ThreadingHTTPServer((host, port), handler_class)
-    _LOGGER.info("Capture platform server listening on http://%s:%s", host, port)
     print(f"Capture platform server listening on http://{host}:{port}")
     server.serve_forever()
 
