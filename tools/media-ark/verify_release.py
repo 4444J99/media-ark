@@ -18,7 +18,7 @@ from typing import Any, Dict, List
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT / "src"))
+sys.path.append(str(REPO_ROOT / "src"))
 from media_ark import BRAND_DATA_DIR, BRAND_PYTHON_PKG, env_key  # noqa: E402
 
 PROCESSOR = REPO_ROOT / "src" / BRAND_PYTHON_PKG / "process_captures.py"

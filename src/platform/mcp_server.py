@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from typing import Any, Dict, Optional
 from pathlib import Path
@@ -15,7 +16,7 @@ from pathlib import Path
 # is set by runpy, but the brand module is at the top of `src/`.
 _SRC = Path(__file__).resolve().parents[1]
 if str(_SRC) not in sys.path:
-    sys.path.insert(0, str(_SRC))
+    sys.path.append(str(_SRC))
 
 from media_ark import BRAND_MCP_NAME  # noqa: E402
 
@@ -27,6 +28,12 @@ from .config import (  # noqa: E402
     default_source_dir,
     normalize_platform_path,
 )
+
+
+# JSON-RPC error code for an unexpected server-side failure.
+INTERNAL_ERROR = -32603
+
+_LOGGER = logging.getLogger("media_ark.mcp")
 
 
 def _reply(correlation: Optional[Any], payload: Dict[str, Any]) -> None:
@@ -148,6 +155,12 @@ def _handle_tool_call(
             _reply(message_id, _ok(message_id, response))
         except PlatformValidationError as exc:
             _reply(message_id, _error(message_id, -32602, str(exc)))
+        except Exception as exc:  # noqa: BLE001 - keep the stdio loop alive
+            _LOGGER.exception("capture_status failed")
+            _reply(
+                message_id,
+                _error(message_id, INTERNAL_ERROR, f"internal error: {exc}"),
+            )
         return
 
     mode = {
@@ -243,12 +256,33 @@ def run_stdio() -> None:
             response = _error(None, -32700, f"invalid json: {exc}")
             print(json.dumps(response), flush=True)
             continue
-        _handle_message(message)
+        if not isinstance(message, dict):
+            _reply(None, _error(None, -32600, "message must be a JSON object"))
+            continue
+        try:
+            _handle_message(message)
+        except Exception as exc:  # noqa: BLE001 - one bad message must not kill the loop
+            _LOGGER.exception("Unhandled error processing message")
+            _reply(
+                message.get("id"),
+                _error(message.get("id"), INTERNAL_ERROR, f"internal error: {exc}"),
+            )
+
+
+def _configure_logging() -> None:
+    # Protocol responses go to stdout; logs must go to stderr so they
+    # never corrupt the JSON-RPC stream a client is parsing.
+    logging.basicConfig(
+        level=logging.INFO,
+        stream=sys.stderr,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Capture platform MCP stdio bridge")
     _ = parser.parse_args()
+    _configure_logging()
     run_stdio()
 
 
