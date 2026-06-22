@@ -17,7 +17,7 @@ from typing import Any, Callable, Dict, Mapping, Optional
 # checkout tree and as `platform.stripe_client` after package installation.
 _SRC = Path(__file__).resolve().parents[1]
 if str(_SRC) not in sys.path:
-    sys.path.insert(0, str(_SRC))
+    sys.path.append(str(_SRC))
 
 from media_ark import env_key  # noqa: E402
 
