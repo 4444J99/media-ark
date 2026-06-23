@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 # imported as `src.platform.billing` from the repository checkout.
 _SRC = Path(__file__).resolve().parents[1]
 if str(_SRC) not in sys.path:
-    sys.path.insert(0, str(_SRC))
+    sys.path.append(str(_SRC))
 
 from media_ark import BRAND_DATA_DIR, env_key  # noqa: E402
 

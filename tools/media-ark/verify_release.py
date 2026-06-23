@@ -18,7 +18,7 @@ from typing import Any, Dict, List
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT / "src"))
+sys.path.append(str(REPO_ROOT / "src"))
 from media_ark import BRAND_DATA_DIR, BRAND_PYTHON_PKG, env_key  # noqa: E402
 
 PROCESSOR = REPO_ROOT / "src" / BRAND_PYTHON_PKG / "process_captures.py"
@@ -64,8 +64,9 @@ def free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def read_json_url(url: str, *, timeout: int = 2) -> Dict[str, Any]:
-    with urllib.request.urlopen(url, timeout=timeout) as response:
+def read_json_url(url: str, *, timeout: int = 2, headers: Dict[str, str] | None = None) -> Dict[str, Any]:
+    req = urllib.request.Request(url, headers=headers or {})
+    with urllib.request.urlopen(req, timeout=timeout) as response:
         payload = json.loads(response.read().decode("utf-8"))
     if not isinstance(payload, dict):
         raise AssertionError(f"expected object response from {url}")
@@ -73,13 +74,16 @@ def read_json_url(url: str, *, timeout: int = 2) -> Dict[str, Any]:
 
 
 def post_json(
-    url: str, payload: Dict[str, Any], *, timeout: int = 10
+    url: str, payload: Dict[str, Any], *, timeout: int = 10, headers: Dict[str, str] | None = None
 ) -> Dict[str, Any]:
+    req_headers = {"Content-Type": "application/json"}
+    if headers:
+        req_headers.update(headers)
     request = urllib.request.Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
         method="POST",
-        headers={"Content-Type": "application/json"},
+        headers=req_headers,
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
         result = json.loads(response.read().decode("utf-8"))
@@ -88,8 +92,9 @@ def post_json(
     return result
 
 
-def read_text_url(url: str, *, timeout: int = 2) -> str:
-    with urllib.request.urlopen(url, timeout=timeout) as response:
+def read_text_url(url: str, *, timeout: int = 2, headers: Dict[str, str] | None = None) -> str:
+    req = urllib.request.Request(url, headers=headers or {})
+    with urllib.request.urlopen(req, timeout=timeout) as response:
         return response.read().decode("utf-8")
 
 
@@ -258,6 +263,8 @@ def verify_platform(tmp_root: Path) -> Dict[str, Any]:
             env_key("SOURCE"): str(source),
             env_key("OUT"): str(out),
             env_key("PORT"): str(port),
+            env_key("USER_SANDBOX_ROOT"): str(tmp_root / "users"),
+            env_key("USERS_DB"): str(tmp_root / "users.db"),
         }
     )
     proc = subprocess.Popen(
@@ -272,9 +279,32 @@ def verify_platform(tmp_root: Path) -> Dict[str, Any]:
     try:
         status = None
         deadline = time.time() + 30
+        api_key = None
         while time.time() < deadline:
             try:
-                status = read_json_url(f"http://127.0.0.1:{port}/api/status")
+                if api_key is None:
+                    try:
+                        reg = post_json(
+                            f"http://127.0.0.1:{port}/api/auth/register",
+                            {"username": "testuser", "password": "password123"},
+                        )
+                        api_key = reg.get("api_key")
+                        user_source = reg.get("source")
+                        user_out = reg.get("out")
+                    except urllib.error.HTTPError as exc:
+                        if exc.code == 409:
+                            login = post_json(
+                                f"http://127.0.0.1:{port}/api/auth/login",
+                                {"username": "testuser", "password": "password123"},
+                            )
+                            api_key = login.get("api_key")
+                            user_source = login.get("source")
+                            user_out = login.get("out")
+                        else:
+                            raise
+
+                headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+                status = read_json_url(f"http://127.0.0.1:{port}/api/status", headers=headers)
                 break
             except Exception:
                 if proc.poll() is not None:
@@ -288,13 +318,16 @@ def verify_platform(tmp_root: Path) -> Dict[str, Any]:
         if status.get("ok") is not True:
             raise AssertionError("platform status was not ok")
 
-        html = read_text_url(f"http://127.0.0.1:{port}/")
-        if "Screen Capture Platform" not in html:
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+
+        html = read_text_url(f"http://127.0.0.1:{port}/", headers=headers)
+        if "Screen Capture Platform" not in html and "Media Ark" not in html:
             raise AssertionError("dashboard HTML did not render expected title")
 
         run_payload = post_json(
             f"http://127.0.0.1:{port}/api/run",
-            {"action": "check-source", "source": str(source), "out": str(out)},
+            {"action": "check-source", "source": user_source, "out": user_out},
+            headers=headers
         )
         if run_payload.get("ok") is not True:
             raise AssertionError("API check-source did not succeed")
@@ -304,7 +337,7 @@ def verify_platform(tmp_root: Path) -> Dict[str, Any]:
         ):
             raise AssertionError("API run did not persist telemetry")
 
-        status_after = read_json_url(f"http://127.0.0.1:{port}/api/status?out={out}")
+        status_after = read_json_url(f"http://127.0.0.1:{port}/api/status?out={user_out}", headers=headers)
         if (
             status_after.get("platform_events_exists") is not True
             or status_after.get("report_count", 0) < 1
@@ -312,7 +345,7 @@ def verify_platform(tmp_root: Path) -> Dict[str, Any]:
             raise AssertionError("API status did not expose telemetry evidence")
 
         try:
-            read_json_url(f"http://127.0.0.1:{port}/api/status?out=/etc")
+            read_json_url(f"http://127.0.0.1:{port}/api/status?out=/etc", headers=headers)
             raise AssertionError("API accepted outside-root path")
         except urllib.error.HTTPError as exc:
             if exc.code != 400:
