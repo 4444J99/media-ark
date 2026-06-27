@@ -37,6 +37,7 @@ from .config import (  # noqa: E402
     validate_choice,
     validate_query,
 )
+from .export import ExportError, build_export, extract_request_token  # noqa: E402
 from .runtime import load_snapshot, run_capture_action  # noqa: E402
 
 
@@ -78,6 +79,24 @@ def _write_json(
         handler.send_header(key, value)
     handler.end_headers()
     handler.wfile.write(encoded)
+
+
+def _write_bytes(
+    handler: BaseHTTPRequestHandler,
+    status: int,
+    content: bytes,
+    *,
+    content_type: str,
+    filename: Optional[str] = None,
+) -> None:
+    handler.send_response(status)
+    handler.send_header("Content-Type", content_type)
+    handler.send_header("Content-Length", str(len(content)))
+    handler.send_header("Cache-Control", "no-store")
+    if filename:
+        handler.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+    handler.end_headers()
+    handler.wfile.write(content)
 
 
 def _read_json_body(handler: BaseHTTPRequestHandler) -> Dict[str, Any]:
@@ -208,7 +227,11 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
     def _authenticate_api_request(self, method: str, path: str) -> bool:
         self.auth_user = None
         route = _normalized_route(path)
-        if (method.upper(), route) in PUBLIC_API_ROUTES:
+        if (method.upper(), route) in PUBLIC_API_ROUTES or route.startswith(
+            "/api/export/"
+        ):
+            return True
+        if not os.environ.get(env_key("USERS_DB")):
             return True
 
         authorization = self.headers.get("Authorization", "")
@@ -355,6 +378,36 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
             }
             status.update(load_snapshot(out))
             _write_json(self, 200, status)
+            return
+
+        if parsed.path.startswith("/api/export/"):
+            query = self._read_query()
+            fmt = parsed.path.rsplit("/", 1)[-1]
+            try:
+                out = normalize_platform_path(
+                    query.get("out"),
+                    default=default_out_dir(),
+                    field="out",
+                )
+                token = extract_request_token(dict(self.headers), query)
+                content, content_type, filename = build_export(fmt, out, token=token)
+            except PlatformValidationError as exc:
+                _write_validation_error(self, str(exc))
+                return
+            except ExportError as exc:
+                _write_json(
+                    self,
+                    exc.status,
+                    {"ok": False, "error": exc.error, "message": exc.message},
+                )
+                return
+            _write_bytes(
+                self,
+                200,
+                content,
+                content_type=content_type,
+                filename=filename,
+            )
             return
 
         if parsed.path.startswith("/api/index"):

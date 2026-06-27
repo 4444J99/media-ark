@@ -178,6 +178,45 @@ def validate_run_id(value: Any) -> str:
     return text
 
 
+def _truthy_env(value: str) -> bool:
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def pro_enabled() -> bool:
+    return _truthy_env(os.environ.get(env_key("PRO"), ""))
+
+
+@dataclass
+class SyncConfig:
+    bucket: str = ""
+    endpoint_url: str = ""
+    prefix: str = ""
+    access_key_id: str = ""
+    secret_access_key: str = ""
+    region: str = "auto"
+    provider: str = "r2"
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.bucket.strip())
+
+    @property
+    def has_credentials(self) -> bool:
+        return bool(self.access_key_id.strip() and self.secret_access_key.strip())
+
+
+def load_sync_config() -> SyncConfig:
+    return SyncConfig(
+        bucket=os.environ.get(env_key("SYNC_BUCKET"), "").strip(),
+        endpoint_url=os.environ.get(env_key("SYNC_ENDPOINT"), "").strip(),
+        prefix=os.environ.get(env_key("SYNC_PREFIX"), "").strip().strip("/"),
+        access_key_id=os.environ.get(env_key("SYNC_ACCESS_KEY_ID"), "").strip(),
+        secret_access_key=os.environ.get(env_key("SYNC_SECRET_ACCESS_KEY"), "").strip(),
+        region=os.environ.get(env_key("SYNC_REGION"), "auto").strip() or "auto",
+        provider=os.environ.get(env_key("SYNC_PROVIDER"), "r2").strip() or "r2",
+    )
+
+
 @dataclass
 class RunOptions:
     source: Path

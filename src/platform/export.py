@@ -23,9 +23,16 @@ import io
 import json
 import os
 import re
+import sys
 import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Tuple
+
+# Ensure the `media_ark` brand module is importable when this module is
+# imported as `src.platform.export`.
+_SRC = Path(__file__).resolve().parents[1]
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
 
 from media_ark import BRAND_NAME, env_key
 
