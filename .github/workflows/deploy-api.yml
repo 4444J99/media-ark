@@ -1,11 +1,14 @@
 # Deploy the media-ark API + dashboard to Cloud Run.
 #
-# Mirrors organvm/limen's deploy-api.yml precedent (same GCP project/region,
-# gcloud run deploy --source). Deliberately GATED on GCP_SA_KEY: with no
-# credential the deploy is skipped with a notice, so this workflow is safe to
-# merge and stays green. The moment the creds organ (or a one-time mint) lands
-# GCP_SA_KEY on this repo, the next push to a deploy path goes live -- no code
-# change, no human decision.
+# SUPERSEDED (2026-07-01) -- this is the road not taken. It was cloned from
+# organvm/limen's deploy-api.yml, which is itself a no-op (limen's live API is a
+# Cloudflare Worker), so it inherited a GCP_SA_KEY requirement for a credential
+# that exists NOWHERE. The deploy host was DERIVED to Cloudflare Containers
+# instead, using a token already owned (see DEPLOY.md). This workflow is KEPT as
+# a harmless no-op (still GATED on GCP_SA_KEY, which will never be set) only so
+# the history stays honest; it does not deploy anything. Do NOT wire GCP_SA_KEY
+# here unless the host decision is ever explicitly reversed back to GCP.
+# The real deploy path lives in DEPLOY.md.
 name: Deploy API
 
 on:
