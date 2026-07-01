@@ -37,6 +37,7 @@ from .config import (  # noqa: E402
     validate_choice,
     validate_query,
 )
+from .export import ExportError, build_export, extract_request_token  # noqa: E402
 from .runtime import load_snapshot, run_capture_action  # noqa: E402
 
 
@@ -333,8 +334,45 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(content)
 
+    def _handle_export(self, parsed: Any) -> None:
+        # Export authorizes with its own pro-tier tokens (MEDIA_ARK_PRO_TOKENS)
+        # and ownership check, returning export.py's stable error slugs -- it is
+        # deliberately not behind the AuthStore bearer gate. See export.py.
+        fmt = parsed.path[len("/api/export/") :].strip("/")
+        query = self._read_query()
+        try:
+            out = normalize_platform_path(
+                query.get("out"), default=default_out_dir(), field="out"
+            )
+        except PlatformValidationError as exc:
+            _write_validation_error(self, str(exc))
+            return
+        token = extract_request_token(self.headers, query)
+        try:
+            content, content_type, filename = build_export(
+                fmt, out, token=token, env=dict(os.environ)
+            )
+        except ExportError as exc:
+            _write_json(
+                self,
+                exc.status,
+                {"ok": False, "error": exc.error, "message": exc.message},
+            )
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header(
+            "Content-Disposition", f'attachment; filename="{filename}"'
+        )
+        self.send_header("Content-Length", str(len(content)))
+        self.end_headers()
+        self.wfile.write(content)
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/export/"):
+            self._handle_export(parsed)
+            return
         if _is_api_path(parsed.path) and not self._authenticate_api_request(
             "GET", parsed.path
         ):
