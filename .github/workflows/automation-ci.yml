@@ -63,4 +63,4 @@ jobs:
 
       - name: Run tox matrix
         run: |
-          tox -m py311 py314
+          tox -e py311,py314
