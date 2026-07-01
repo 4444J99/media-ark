@@ -7,6 +7,7 @@ import json
 import mimetypes
 import os
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -38,6 +39,7 @@ from .config import (  # noqa: E402
     validate_query,
 )
 from .export import ExportError, build_export, extract_request_token  # noqa: E402
+from .license import load_license_pubkey, verify_license  # noqa: E402
 from .quota import QuotaExceeded, QuotaStore, directory_size  # noqa: E402
 from .runtime import _coerce_bool, load_snapshot, run_capture_action  # noqa: E402
 
@@ -557,6 +559,53 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
 
         self._serve_static(parsed.path)
 
+    def _handle_license(self) -> None:
+        """Verify a MONETA-signed Pro licence and upgrade the caller's tier.
+
+        Fully offline: the licence is checked against the embedded MONETA
+        public key (``MEDIA_ARK_LICENSE_PUBKEY``) -- no processor, no network.
+        Runs behind the bearer gate, so the grant lands on the authenticated
+        user. A valid, unexpired ``pro`` licence sets their ledger tier to
+        pro -- the ONLY path to pro (a client ``X-User-Tier`` header cannot
+        grant it; tier is not read from request headers at all).
+        """
+
+        try:
+            body = _read_json_body(self)
+        except RequestValidationError as exc:
+            _write_validation_error(self, str(exc))
+            return
+        token = str(body.get("license", "") or "").strip()
+        if not token:
+            _write_validation_error(self, "license is required")
+            return
+        pubkey = load_license_pubkey()
+        if pubkey is None:
+            _write_json(
+                self,
+                503,
+                {
+                    "ok": False,
+                    "error": "license_verification_unavailable",
+                    "message": "no MONETA public key configured for this build",
+                },
+            )
+            return
+        result = verify_license(token, pubkey, now_s=int(time.time()))
+        if not result.valid:
+            _write_json(
+                self,
+                400,
+                {"ok": False, "error": "invalid_license", "reason": result.reason},
+            )
+            return
+        user_id = self._identify_user()
+        _quota_store().set_tier(user_id, "pro")
+        usage = _quota_store().get_usage(user_id)
+        _write_json(
+            self, 200, {"ok": True, "tier": usage.tier, "usage": usage.to_dict()}
+        )
+
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
         route = parsed.path.rstrip("/")
@@ -575,6 +624,10 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
 
         if route == "/api/auth/api-key":
             self._handle_api_key()
+            return
+
+        if route == "/api/license":
+            self._handle_license()
             return
 
         if route != "/api/run":
