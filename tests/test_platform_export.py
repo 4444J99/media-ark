@@ -197,11 +197,13 @@ def _free_port() -> int:
 
 
 def _wait_for_api(port: int, attempts: int = 30) -> None:
+    # Probe the public static root: /api/status now requires a bearer token
+    # (see test_platform_api.test_status_requires_auth), so an unauthenticated
+    # readiness check against it would loop on 401 forever. Root serves the
+    # dashboard without auth -- the canonical liveness probe used across the suite.
     for _ in range(attempts):
         try:
-            with urllib.request.urlopen(
-                f"http://127.0.0.1:{port}/api/status"
-            ) as response:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/") as response:
                 if response.status == 200:
                     return
         except Exception:
