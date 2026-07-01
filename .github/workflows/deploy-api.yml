@@ -1,0 +1,64 @@
+# Deploy the media-ark API + dashboard to Cloud Run.
+#
+# Mirrors organvm/limen's deploy-api.yml precedent (same GCP project/region,
+# gcloud run deploy --source). Deliberately GATED on GCP_SA_KEY: with no
+# credential the deploy is skipped with a notice, so this workflow is safe to
+# merge and stays green. The moment the creds organ (or a one-time mint) lands
+# GCP_SA_KEY on this repo, the next push to a deploy path goes live -- no code
+# change, no human decision.
+name: Deploy API
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "Dockerfile"
+      - ".github/workflows/deploy-api.yml"
+  workflow_dispatch:
+
+env:
+  GCP_PROJECT_ID: device-streaming-067d747a
+  GCP_REGION: us-central1
+  CLOUD_RUN_SERVICE: media-ark-api
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # allow-secret
+    env:
+      GCP_SA_KEY_SET: ${{ secrets.GCP_SA_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Note skipped deploy
+        if: env.GCP_SA_KEY_SET == 'false'
+        run: echo "::notice::GCP_SA_KEY not configured; skipping Cloud Run deploy. media-ark stays undeployed until the creds organ lands GCP_SA_KEY on this repo."
+
+      - uses: google-github-actions/auth@v3
+        if: env.GCP_SA_KEY_SET == 'true'
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v3
+        if: env.GCP_SA_KEY_SET == 'true'
+
+      - name: Deploy Cloud Run service
+        if: env.GCP_SA_KEY_SET == 'true'
+        run: |
+          gcloud run deploy "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --source . \
+            --allow-unauthenticated \
+            --set-env-vars MEDIA_ARK_QUOTA_DB=/tmp/media-ark/quota.json,MEDIA_ARK_USERS_DB=/tmp/media-ark/users.db,MEDIA_ARK_USER_SANDBOX_ROOT=/tmp/media-ark/sandboxes
+
+      - name: Print service URL
+        if: env.GCP_SA_KEY_SET == 'true'
+        run: |
+          gcloud run services describe "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --format='value(status.url)'
