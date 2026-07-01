@@ -154,12 +154,18 @@ run_step() {
 mkdir -p "$REPORT_DIR"
 
 if [[ "$CHECK_SOURCE" == "1" ]]; then
-  run_step "check-source" \
-    "${COMMON_ARGS[@]}" \
-    --check-source \
-    "$@" \
-    "${NO_OCR[@]}" \
-    "${NO_THUMBNAILS[@]}"
+  check_step_args=(
+    "${COMMON_ARGS[@]}"
+    --check-source
+  )
+  if ((${#NO_OCR[@]} > 0)); then
+    check_step_args+=("${NO_OCR[@]}")
+  fi
+  if ((${#NO_THUMBNAILS[@]} > 0)); then
+    check_step_args+=("${NO_THUMBNAILS[@]}")
+  fi
+  check_step_args+=("$@")
+  run_step "check-source" "${check_step_args[@]}"
 fi
 
 run_step_args=(
@@ -167,9 +173,15 @@ run_step_args=(
   --max-files "$MAX_FILES"
   --cleanup-state-days "$CLEANUP_STATE_DAYS"
 )
-run_step_args+=("${COPY_FLAG[@]}")
-run_step_args+=("${NO_OCR[@]}")
-run_step_args+=("${NO_THUMBNAILS[@]}")
+if ((${#COPY_FLAG[@]} > 0)); then
+  run_step_args+=("${COPY_FLAG[@]}")
+fi
+if ((${#NO_OCR[@]} > 0)); then
+  run_step_args+=("${NO_OCR[@]}")
+fi
+if ((${#NO_THUMBNAILS[@]} > 0)); then
+  run_step_args+=("${NO_THUMBNAILS[@]}")
+fi
 if [[ "$CLEANUP_RAW" == "1" ]]; then
   run_step_args+=("${CLEANUP_RAW_ARGS[@]}")
 fi
