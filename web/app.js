@@ -34,6 +34,14 @@ function renderStatus(payload) {
   el('#outStatus').textContent = payload.out || '-';
   el('#manifestStatus').textContent = payload.manifest_exists ? 'present' : 'missing';
   el('#indexRows').textContent = String(payload.index_rows || 0);
+
+  const stats = payload.manifest?.stats || {};
+  el('#metricRuns').textContent = stats.runs ?? '-';
+  el('#metricProcessed').textContent = stats.files_seen_total ?? '-';
+  el('#metricDuplicates').textContent = stats.duplicates ?? '-';
+  el('#metricImages').textContent = stats.images ?? '-';
+  el('#metricVideos').textContent = stats.videos ?? '-';
+  el('#metricErrors').textContent = stats.errors ?? '-';
 }
 
 function renderResults(payload) {
