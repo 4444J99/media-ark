@@ -231,7 +231,7 @@ class TestApiServer(unittest.TestCase):
 
                 with urllib.request.urlopen(f"http://127.0.0.1:{port}/") as response:
                     page = response.read().decode("utf-8")
-                self.assertIn("Screen Capture Platform", page)
+                self.assertIn("Media Ark Dashboard", page)
                 self.assertIn("script src=\"/app.js\"", page)
 
                 with urllib.request.urlopen(f"http://127.0.0.1:{port}/styles.css") as response:
