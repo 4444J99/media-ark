@@ -185,7 +185,7 @@ class TestCliSmoke(unittest.TestCase):
                     )
                 self.assertTrue(status_payload["ok"])
                 self.assertEqual(status_payload["api_version"], "1.0")
-                self.assertIn("Screen Capture Platform", page_text)
+                self.assertIn("Media Ark Dashboard", page_text)
             finally:
                 try:
                     os.killpg(proc.pid, signal.SIGTERM)
