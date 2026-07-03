@@ -3,77 +3,124 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Screen Capture Platform</title>
+  <title>Media Ark Platform</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <main class="container">
     <header>
-      <h1>Screen Capture Automation Platform</h1>
-      <p>Run ingest, inspect status, and trigger capture workflows from one place.</p>
+      <h1>Media Ark Dashboard</h1>
+      <p>Local-first media archive pipeline for images, video, PDF, and documents.</p>
     </header>
+
+    <section class="card metrics-card" style="margin-bottom: 24px;">
+      <h2>Key Metrics</h2>
+      <div class="metrics-grid">
+        <div class="metric-box">
+          <div class="metric-value" id="metricProcessed">-</div>
+          <div class="metric-label">Processed</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-value" id="metricImages">-</div>
+          <div class="metric-label">Images</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-value" id="metricVideos">-</div>
+          <div class="metric-label">Videos</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-value" id="metricDuplicates">-</div>
+          <div class="metric-label">Duplicates</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-value" id="metricErrors">-</div>
+          <div class="metric-label">Errors</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-value" id="metricRuns">-</div>
+          <div class="metric-label">Total Runs</div>
+        </div>
+      </div>
+    </section>
 
     <section class="grid">
       <article class="card">
         <h2>Pipeline Controls</h2>
         <div class="row">
-          <label for="sourcePath">Source</label>
+          <label for="sourcePath">Source Path</label>
           <input id="sourcePath" value="data/captures/raw" />
         </div>
         <div class="row">
-          <label for="outPath">Out</label>
+          <label for="outPath">Output Directory</label>
           <input id="outPath" value=".media-ark" />
         </div>
-        <div class="row">
-          <label><input id="copyMode" type="checkbox" /> Keep source (copy mode)</label>
-          <label><input id="dryRun" type="checkbox" /> Dry run</label>
+        <div class="row" style="display: flex; gap: 16px; margin-top: 12px; align-items: center;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input id="copyMode" type="checkbox" style="width: 18px; height: 18px; accent-color: var(--primary);" /> 
+            Keep source (copy mode)
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input id="dryRun" type="checkbox" style="width: 18px; height: 18px; accent-color: var(--primary);" /> 
+            Dry run
+          </label>
         </div>
         <div class="row">
-          <label for="maxFiles">Max files</label>
+          <label for="maxFiles">Max files limit</label>
           <input id="maxFiles" type="number" min="0" value="0" />
         </div>
         <div class="btn-row">
           <button data-action="check">Check Source</button>
           <button data-action="process">Run Process</button>
           <button data-action="verify">Verify</button>
-          <button data-action="query">Query</button>
         </div>
       </article>
 
-      <article class="card">
+      <article class="card service-health">
         <h2>Service Health</h2>
-        <p><strong>Source:</strong> <span id="sourceStatus">-</span></p>
-        <p><strong>Out:</strong> <span id="outStatus">-</span></p>
-        <p><strong>Manifest:</strong> <span id="manifestStatus">-</span></p>
-        <p><strong>Index Rows:</strong> <span id="indexRows">-</span></p>
+        <p><strong>Source Dir</strong> <span id="sourceStatus">-</span></p>
+        <p><strong>Out Dir</strong> <span id="outStatus">-</span></p>
+        <p><strong>Manifest</strong> <span id="manifestStatus">-</span></p>
+        <p><strong>Index Rows</strong> <span id="indexRows">-</span></p>
+        
+        <h2 style="margin-top: 32px;">Last Run Output</h2>
+        <pre id="lastRun" class="results" style="max-height: 140px;">No run yet.</pre>
       </article>
     </section>
 
-    <section class="card">
+    <section class="card" style="margin-bottom: 24px;">
       <h2>Index Viewer</h2>
-      <p><strong>Query:</strong> <input id="queryText" placeholder='e.g. invoice' /></p>
-      <p><strong>Media:</strong>
-        <select id="queryMedia">
-          <option value="all">All</option>
-          <option value="image">Image</option>
-          <option value="video">Video</option>
-          <option value="document">Document</option>
-        </select>
-      </p>
-      <p><strong>Status:</strong>
-        <select id="queryStatus">
-          <option value="all">All</option>
-          <option value="processed">processed</option>
-          <option value="duplicate">duplicate</option>
-        </select>
-      </p>
-      <p><strong>Limit:</strong> <input id="queryLimit" type="number" min="1" value="25" /> <button data-action="refresh-index">Refresh Index</button></p>
+      <div class="grid" style="grid-template-columns: 2fr 1fr 1fr 1fr; margin-bottom: 16px;">
+        <div class="row">
+          <label>Query text</label>
+          <input id="queryText" placeholder='e.g. invoice' />
+        </div>
+        <div class="row">
+          <label>Media</label>
+          <select id="queryMedia">
+            <option value="all">All</option>
+            <option value="image">Image</option>
+            <option value="video">Video</option>
+            <option value="document">Document</option>
+          </select>
+        </div>
+        <div class="row">
+          <label>Status</label>
+          <select id="queryStatus">
+            <option value="all">All</option>
+            <option value="processed">Processed</option>
+            <option value="duplicate">Duplicate</option>
+          </select>
+        </div>
+        <div class="row">
+          <label>Limit</label>
+          <input id="queryLimit" type="number" min="1" value="25" />
+        </div>
+      </div>
+      <div class="btn-row" style="margin-bottom: 16px;">
+        <button data-action="query">Search Platform</button>
+        <button data-action="refresh-index" style="background: rgba(30,41,59,0.8); box-shadow: none;">Refresh Index</button>
+      </div>
       <pre id="results" class="results">No results yet.</pre>
-    </section>
-
-    <section class="card">
-      <h2>Last Run</h2>
-      <pre id="lastRun" class="results">No run yet.</pre>
     </section>
   </main>
   <script src="/app.js"></script>
