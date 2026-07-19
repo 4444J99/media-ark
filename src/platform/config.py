@@ -6,7 +6,7 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, List, Optional
+from typing import Any, Iterable, List, Mapping, Optional
 
 # Ensure the `media_ark` brand module is importable when this file is
 # imported as `src.platform.config` (the brand module lives at the top
@@ -222,3 +222,61 @@ class ActionResult:
     error: Optional[str] = None
     event_log: str = ""
     report: str = ""
+
+
+@dataclass
+class SyncConfig:
+    """Typed configuration for the pro-tier cloud-sync backend (S3 / Cloudflare R2).
+
+    Every field defaults to empty so ``SyncConfig()`` is a valid "unconfigured"
+    value. :func:`load_sync_config` builds one from the ``MEDIA_ARK_SYNC_*``
+    environment, and :mod:`src.platform.sync` reads the derived properties
+    (``is_configured`` / ``has_credentials`` / ``provider``). No secret is ever
+    logged or surfaced -- ``sync_status`` reports state, never key material.
+    """
+
+    bucket: str = ""
+    endpoint_url: str = ""
+    prefix: str = ""
+    region: str = "auto"
+    access_key_id: str = ""
+    secret_access_key: str = ""
+
+    @property
+    def is_configured(self) -> bool:
+        """True once a destination bucket is set."""
+        return bool(self.bucket.strip())
+
+    @property
+    def has_credentials(self) -> bool:
+        """True once both halves of the access key are present."""
+        return bool(self.access_key_id.strip() and self.secret_access_key.strip())
+
+    @property
+    def provider(self) -> str:
+        """Backend label; Cloudflare R2 is detected by its endpoint host."""
+        return "r2" if "r2.cloudflarestorage" in self.endpoint_url.lower() else "s3"
+
+
+def load_sync_config(env: Optional[Mapping[str, str]] = None) -> SyncConfig:
+    """Build a :class:`SyncConfig` from the ``MEDIA_ARK_SYNC_*`` environment."""
+    source = os.environ if env is None else env
+
+    def _get(name: str) -> str:
+        return str(source.get(env_key(name), "") or "").strip()
+
+    return SyncConfig(
+        bucket=_get("SYNC_BUCKET"),
+        endpoint_url=_get("SYNC_ENDPOINT"),
+        prefix=_get("SYNC_PREFIX"),
+        region=_get("SYNC_REGION") or "auto",
+        access_key_id=_get("SYNC_ACCESS_KEY_ID"),
+        secret_access_key=_get("SYNC_SECRET_ACCESS_KEY"),
+    )
+
+
+def pro_enabled(env: Optional[Mapping[str, str]] = None) -> bool:
+    """True when the 'pro' tier is switched on via ``MEDIA_ARK_PRO``."""
+    source = os.environ if env is None else env
+    value = str(source.get(env_key("PRO"), "") or "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
