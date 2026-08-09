@@ -34,7 +34,7 @@ jobs:
     env:
       GCP_SA_KEY_SET: ${{ secrets.GCP_SA_KEY != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Note skipped deploy
         if: env.GCP_SA_KEY_SET == 'false'
