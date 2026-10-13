@@ -38,7 +38,7 @@ from .config import (  # noqa: E402
     validate_choice,
     validate_query,
 )
-from .export import ExportError, build_export, extract_request_token  # noqa: E402
+from .export import ExportError, build_export, extract_request_token, load_pro_tokens  # noqa: E402
 from .license import load_license_pubkey, verify_license  # noqa: E402
 from .quota import QuotaExceeded, QuotaStore, directory_size  # noqa: E402
 from .runtime import _coerce_bool, load_snapshot, run_capture_action  # noqa: E402
@@ -395,22 +395,23 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(content)
 
     def _handle_export(self, parsed: Any) -> None:
-        # Export authorizes with its own pro-tier tokens (MEDIA_ARK_PRO_TOKENS)
-        # and ownership check, returning export.py's stable error slugs -- it is
-        # deliberately not behind the AuthStore bearer gate. See export.py.
         fmt = parsed.path[len("/api/export/") :].strip("/")
         query = self._read_query()
         try:
             out = normalize_platform_path(
-                query.get("out"), default=default_out_dir(), field="out"
+                query.get("out"),
+                default=_default_paths_for_user(self.auth_user)[1],
+                field="out",
+                roots=_auth_roots(self.auth_user),
             )
         except PlatformValidationError as exc:
             _write_validation_error(self, str(exc))
             return
-        token = extract_request_token(self.headers, query)
+        pro_tokens = load_pro_tokens(os.environ)
+        token = extract_request_token(self.headers, query, pro_tokens=pro_tokens)
         try:
             content, content_type, filename = build_export(
-                fmt, out, token=token, env=dict(os.environ)
+                fmt, out, token=token, env=dict(os.environ), user=self.auth_user
             )
         except ExportError as exc:
             _write_json(
@@ -430,13 +431,13 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
-        # Export authorizes with its own pro-token model, ahead of the gate.
-        if parsed.path.startswith("/api/export/"):
-            self._handle_export(parsed)
-            return
         if _is_api_path(parsed.path) and not self._authenticate_api_request(
             "GET", parsed.path
         ):
+            return
+
+        if parsed.path.startswith("/api/export/"):
+            self._handle_export(parsed)
             return
 
         if parsed.path.startswith("/api/quota"):

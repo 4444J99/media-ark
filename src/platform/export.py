@@ -25,9 +25,12 @@ import os
 import re
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Tuple
 
 from media_ark import BRAND_NAME, env_key
+
+if TYPE_CHECKING:
+    from .auth import AuthUser
 
 # Formats the export surface knows how to render, mapped to the
 # (content-type, file extension) used for the download response.
@@ -81,23 +84,37 @@ class ExportError(Exception):
         self.message = message
 
 
-def extract_request_token(headers: Optional[Mapping[str, str]], query: Mapping[str, Any]) -> str:
+def extract_request_token(
+    headers: Optional[Mapping[str, str]],
+    query: Mapping[str, Any],
+    pro_tokens: Optional[Mapping[str, str]] = None,
+) -> str:
     """Pull the caller's pro-tier token from headers or query string.
 
     Accepts ``Authorization: Bearer <token>``, ``X-Api-Key: <token>``, or a
-    ``token`` query parameter, in that order of precedence.
+    ``token`` query parameter. If ``pro_tokens`` is provided, evaluates candidate
+    tokens against configured pro tokens to select a valid pro token.
     """
+    candidates = []
     if headers is not None:
         authorization = str(headers.get("Authorization", "") or "")
         if authorization[:7].lower() == "bearer ":
             token = authorization[7:].strip()
             if token:
-                return token
+                candidates.append(token)
         api_key = str(headers.get("X-Api-Key", "") or "").strip()
         if api_key:
-            return api_key
-    token = query.get("token", "")
-    return str(token).strip() if token else ""
+            candidates.append(api_key)
+    query_token = str(query.get("token", "") or "").strip()
+    if query_token:
+        candidates.append(query_token)
+
+    if pro_tokens:
+        for cand in candidates:
+            if cand in pro_tokens:
+                return cand
+
+    return candidates[0] if candidates else ""
 
 
 def load_pro_tokens(env: Optional[Mapping[str, str]] = None) -> Dict[str, str]:
@@ -145,17 +162,21 @@ def authorize_pro(token: str, tokens: Mapping[str, str]) -> str:
     return principal
 
 
-def check_ownership(principal: str, manifest: Optional[Mapping[str, Any]]) -> None:
-    """Require ``principal`` to own the archive, when ownership is recorded.
+def check_ownership(
+    principal: str,
+    manifest: Optional[Mapping[str, Any]],
+    user: Optional[AuthUser] = None,
+) -> None:
+    """Require ``principal`` (and ``user`` if provided) to own the archive, when ownership is recorded.
 
     An archive declares ownership via the ``owner`` field of its manifest. An
     archive with no recorded owner is treated as unowned and exportable by any
-    authorized pro caller.
+    authorized pro caller within their sandbox boundary.
     """
     owner = manifest.get("owner") if isinstance(manifest, Mapping) else None
     if owner in (None, ""):
         return
-    if str(owner) != str(principal):
+    if str(owner) != str(principal) and (user is None or str(owner) != str(user.username)):
         raise ExportError(403, "ownership_denied", "you are not the owner of this archive")
 
 
@@ -281,12 +302,21 @@ def build_export(
     *,
     token: str,
     env: Optional[Mapping[str, str]] = None,
+    user: Optional[AuthUser] = None,
 ) -> Tuple[bytes, str, str]:
     """Authorize and render an export, returning ``(content, content_type, filename)``.
 
     Raises :class:`ExportError` for an unknown format, a caller that is not on
     the pro tier, or a caller that does not own the archive.
     """
+    if user is not None:
+        try:
+            out.expanduser().resolve().relative_to(user.sandbox.expanduser().resolve())
+        except ValueError:
+            raise ExportError(
+                403, "ownership_denied", "export path is outside user sandbox"
+            )
+
     normalized = str(fmt or "").strip().lower()
     spec = EXPORT_FORMATS.get(normalized)
     if spec is None:
@@ -300,7 +330,7 @@ def build_export(
 
     principal = authorize_pro(token, load_pro_tokens(env))
     manifest = _read_manifest(out)
-    check_ownership(principal, manifest)
+    check_ownership(principal, manifest, user=user)
 
     if normalized == "csv":
         content = render_csv(_load_index_rows(out))
