@@ -39,6 +39,7 @@ This project follows [Keep a Changelog](https://keepachangelog.com/) and uses
 - GitHub Actions workflow for dependabot github-actions update (#1635125501) completed successfully on main (https://github.com/4444J99/media-ark/actions/runs/39187403257). CI green after actions/setup-python and related bumps. Receipt: small progress step on near-release product.
 - Dependabot "pip in /." update (#1635125348) succeeded (https://github.com/4444J99/media-ark/actions/runs/39187400842, commit ff0d8ba4c3db12443b3b1cbd0bc7fe0c945a01d3). Receipt: green progress step on near-finished Stage 4/5 repo.
 - GitHub Actions workflow "capture-automation-ci" completed successfully on main (https://github.com/4444J99/media-ark/actions/runs/39187518823) for commit e36d4bc7b603de7ed5e2cea17bb5fe903da878ae. Receipt: green progress step confirming CI on near-finished (Stage 4/5) product.
+- capture-automation-ci completed successfully on green progress receipt commit 12b1883ca321f7644db0917074bf80adcc2c8a8c (https://github.com/4444J99/media-ark/actions/runs/39187624174). Receipt: small polish confirming green CI on near-finished Stage 4/5 media-ark.
 
 ## [0.2.0] — 2026-06-10
 
