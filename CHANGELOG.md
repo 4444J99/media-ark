@@ -35,6 +35,9 @@ This project follows [Keep a Changelog](https://keepachangelog.com/) and uses
 - MCP tool names `capture_status`, `capture_check`, `capture_run`, `capture_verify`, `capture_query` (API contract; renaming these would break MCP clients).
 - The 12 prior closeout files in `~/.Codex/plans/` (historical record; references the old repo URL by design).
 
+### Verified
+- GitHub Actions workflow for dependabot github-actions update (#1635125501) completed successfully on main (https://github.com/4444J99/media-ark/actions/runs/39187403257). CI green after actions/setup-python and related bumps. Receipt: small progress step on near-release product.
+
 ## [0.2.0] — 2026-06-10
 
 ### Added
