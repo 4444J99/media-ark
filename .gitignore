@@ -37,3 +37,13 @@ data/captures/raw/
 # runtime data model. Preserved on disk for reference, excluded
 # from version control. See docs/legacy-data-2026-06-10.md.
 .media-ark-data-legacy-2026-06-10/
+
+# Agent work records are kept in a private archive, not in public repos.
+.claude/plans/
+.claude/handoffs/
+.codex/plans/
+.codex/receipts/
+.gemini/plans/
+.gemini/handoffs/
+.conductor/
+.specstory/
