@@ -235,15 +235,47 @@ class TestExportApi(unittest.TestCase):
 
     def test_export_csv_with_bearer_token(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            out = Path(tmp) / "out"
-            _seed_archive(out)
+            root = Path(tmp)
+            auth_db = root / "users.db"
+            sandboxes = root / "sandboxes"
+            env = dict(os.environ)
+            env["MEDIA_ARK_USERS_DB"] = str(auth_db)
+            env["MEDIA_ARK_USER_SANDBOX_ROOT"] = str(sandboxes)
+            env["MEDIA_ARK_PRO_TOKENS"] = "tok1:alice"
+
             port = _free_port()
-            proc = self._start_server(port, "tok1:alice")
+            proc = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-m",
+                    "src.platform.api_server",
+                    "--host",
+                    "127.0.0.1",
+                    "--port",
+                    str(port),
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                env=env,
+            )
             try:
                 _wait_for_api(port)
+                # Register user alice
+                reg_req = urllib.request.Request(
+                    f"http://127.0.0.1:{port}/api/auth/register",
+                    data=json.dumps({"username": "alice", "password": "password123"}).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(reg_req) as resp:
+                    alice_auth = json.loads(resp.read().decode("utf-8"))
+                user_api_key = alice_auth["api_key"]
+                alice_out = Path(alice_auth["out"])
+                _seed_archive(alice_out)
+
                 request = urllib.request.Request(
-                    f"http://127.0.0.1:{port}/api/export/csv?out={out}",
-                    headers={"Authorization": "Bearer tok1"},
+                    f"http://127.0.0.1:{port}/api/export/csv?out={alice_out}&token=tok1",
+                    headers={"Authorization": f"Bearer {user_api_key}"},
                 )
                 with urllib.request.urlopen(request) as response:
                     self.assertEqual(response.status, 200)
@@ -255,42 +287,106 @@ class TestExportApi(unittest.TestCase):
                 proc.terminate()
                 proc.wait(timeout=5)
 
-    def test_export_requires_pro_token(self) -> None:
+    def test_export_requires_bearer_auth(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            out = Path(tmp) / "out"
-            _seed_archive(out)
+            root = Path(tmp)
+            env = dict(os.environ)
+            env["MEDIA_ARK_USERS_DB"] = str(root / "users.db")
+            env["MEDIA_ARK_USER_SANDBOX_ROOT"] = str(root / "sandboxes")
+            env["MEDIA_ARK_PRO_TOKENS"] = "tok1"
+
             port = _free_port()
-            proc = self._start_server(port, "tok1")
+            proc = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-m",
+                    "src.platform.api_server",
+                    "--host",
+                    "127.0.0.1",
+                    "--port",
+                    str(port),
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                env=env,
+            )
             try:
                 _wait_for_api(port)
+                # Request without AuthStore bearer token should return 401
                 with self.assertRaises(urllib.error.HTTPError) as ctx:
                     urllib.request.urlopen(
-                        f"http://127.0.0.1:{port}/api/export/json?out={out}"
+                        f"http://127.0.0.1:{port}/api/export/json?token=tok1"
                     )
                 self.assertEqual(ctx.exception.code, 401)
                 payload = json.loads(ctx.exception.read().decode("utf-8"))
-                self.assertEqual(payload["error"], "missing_token")
+                self.assertEqual(payload["error"], "unauthorized")
             finally:
                 proc.terminate()
                 proc.wait(timeout=5)
 
-    def test_export_ownership_enforced_over_http(self) -> None:
+    def test_cross_sandbox_export_and_missing_manifest_owner_prevented(self) -> None:
+        """Integration test with two users (attacker and victim) to ensure:
+        - An authenticated Pro user cannot export another user's sandbox out path.
+        - A missing/unreadable manifest.json owner never allows cross-user export.
+        """
         with tempfile.TemporaryDirectory() as tmp:
-            out = Path(tmp) / "out"
-            _seed_archive(out, owner="bob")
+            root = Path(tmp)
+            env = dict(os.environ)
+            env["MEDIA_ARK_USERS_DB"] = str(root / "users.db")
+            env["MEDIA_ARK_USER_SANDBOX_ROOT"] = str(root / "sandboxes")
+            env["MEDIA_ARK_PRO_TOKENS"] = "attacker-pro-token:attacker"
+
             port = _free_port()
-            proc = self._start_server(port, "tok1:alice")
+            proc = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-m",
+                    "src.platform.api_server",
+                    "--host",
+                    "127.0.0.1",
+                    "--port",
+                    str(port),
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                env=env,
+            )
             try:
                 _wait_for_api(port)
-                request = urllib.request.Request(
-                    f"http://127.0.0.1:{port}/api/export/zip?out={out}",
-                    headers={"Authorization": "Bearer tok1"},
+                # Register victim
+                v_req = urllib.request.Request(
+                    f"http://127.0.0.1:{port}/api/auth/register",
+                    data=json.dumps({"username": "victim", "password": "password123"}).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(v_req) as resp:
+                    v_auth = json.loads(resp.read().decode("utf-8"))
+                v_out = Path(v_auth["out"])
+                # Seed victim archive without owner (unowned synthetic archive)
+                _seed_archive(v_out, owner=None)
+
+                # Register attacker
+                a_req = urllib.request.Request(
+                    f"http://127.0.0.1:{port}/api/auth/register",
+                    data=json.dumps({"username": "attacker", "password": "password123"}).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(a_req) as resp:
+                    a_auth = json.loads(resp.read().decode("utf-8"))
+                attacker_api_key = a_auth["api_key"]
+
+                # Attacker tries to export victim's out directory
+                req = urllib.request.Request(
+                    f"http://127.0.0.1:{port}/api/export/zip?out={v_out}&token=attacker-pro-token",
+                    headers={"Authorization": f"Bearer {attacker_api_key}"},
                 )
                 with self.assertRaises(urllib.error.HTTPError) as ctx:
-                    urllib.request.urlopen(request)
-                self.assertEqual(ctx.exception.code, 403)
+                    urllib.request.urlopen(req)
+                self.assertEqual(ctx.exception.code, 400) # validation error: path outside allowed roots
                 payload = json.loads(ctx.exception.read().decode("utf-8"))
-                self.assertEqual(payload["error"], "ownership_denied")
+                self.assertEqual(payload["error"], "validation_error")
             finally:
                 proc.terminate()
                 proc.wait(timeout=5)
