@@ -24,6 +24,7 @@ from src.platform.export import (
     load_pro_tokens,
     render_csv,
 )
+from src.platform.api_server import _is_public_api_request
 
 
 def _seed_archive(out: Path, *, owner: str | None = None) -> None:
@@ -71,6 +72,19 @@ def _seed_archive(out: Path, *, owner: str | None = None) -> None:
 
 
 class TestExportUnit(unittest.TestCase):
+    def test_export_routes_require_bearer_auth(self) -> None:
+        # Export routes are NOT public: the caller must authenticate with a
+        # user bearer <redacted> (which also scopes the sandbox boundary) and
+        # authorize the pro tier with a pro token. Exempting GET /api/export/*
+        # from bearer auth let unauthenticated pro-token holders export any
+        # path and dropped the sandbox boundary (auth_user=None -> roots=None).
+        self.assertFalse(_is_public_api_request("GET", "/api/export/csv"))
+        self.assertFalse(_is_public_api_request("GET", "/api/export/json/"))
+        self.assertFalse(_is_public_api_request("POST", "/api/export/csv"))
+        self.assertFalse(_is_public_api_request("GET", "/api/status"))
+        self.assertTrue(_is_public_api_request("POST", "/api/auth/register"))
+        self.assertTrue(_is_public_api_request("POST", "/api/auth/login"))
+
     def test_load_pro_tokens_parses_principals(self) -> None:
         tokens = load_pro_tokens({"MEDIA_ARK_PRO_TOKENS": "tok1:alice, tok2 ,tok3:bob"})
         self.assertEqual(tokens, {"tok1": "alice", "tok2": "tok2", "tok3": "bob"})

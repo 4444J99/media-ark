@@ -21,6 +21,9 @@ Release rollback and recovery commands are documented in [RELEASE.md](RELEASE.md
 
 Surface-specific onboarding for CLI, API, MCP, and dashboard UI is documented in [ONBOARDING.md](ONBOARDING.md).
 
+Customer-facing endpoint contracts, authentication flows, examples, and export
+usage are documented in [api-reference.md](api-reference.md).
+
 Pricing and the free local-only vs Pro encrypted cloud sync/backup split are documented in [PRICING.md](PRICING.md).
 
 Current ship evidence and remote CI status are documented in [SHIP_EVIDENCE.md](SHIP_EVIDENCE.md).
