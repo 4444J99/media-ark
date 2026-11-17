@@ -1015,7 +1015,6 @@ def process_file(
             "captured_at": captured_at.isoformat(),
         }
         record_status = "duplicate"
-        bump_stat(manifest, "duplicates")
         notes = f"duplicate_of:{existing}"
         sidecar = {
             "id": file_hash[:12],
@@ -1180,6 +1179,9 @@ def process_file(
             )
             if hook_results:
                 sidecar["post_hook_results"] = hook_results
+                sidecar_path.write_text(
+                    json.dumps(sidecar, indent=2), encoding="utf-8"
+                )
 
         if media_type == "image":
             bump_stat(manifest, "images")
@@ -1216,6 +1218,23 @@ def keep_record_by_age(record: Dict[str, Any], cutoff: datetime) -> bool:
     return created_at >= cutoff
 
 
+def index_record_key(record: Dict[str, Any]) -> str:
+    status = str(record.get("status", "")).strip().lower()
+    source_path = str(record.get("source_path", "")).strip()
+    canonical_path = str(record.get("canonical_path", "")).strip()
+    record_id = str(record.get("id", "")).strip()
+
+    if status == "duplicate" and source_path:
+        return f"duplicate:{source_path}"
+    if canonical_path:
+        return f"canonical:{canonical_path}"
+    if source_path:
+        return f"source:{source_path}"
+    if record_id:
+        return f"id:{record_id}"
+    return ""
+
+
 def build_index(
     records: List[CaptureRecord],
     out_root: Path,
@@ -1224,14 +1243,14 @@ def build_index(
 ) -> Tuple[int, int]:
     merged: Dict[str, Dict[str, Any]] = {}
     for row in load_index_records(out_root):
-        key = row.get("canonical_path") or row.get("source_path") or row.get("id")
+        key = index_record_key(row)
         if key:
-            merged[str(key)] = row
+            merged[key] = row
 
     for row in [asdict(r) for r in records if r is not None]:
-        key = row.get("canonical_path") or row.get("source_path") or row.get("id")
+        key = index_record_key(row)
         if key:
-            merged[str(key)] = row
+            merged[key] = row
 
     rows = list(merged.values())
     if retention_days > 0:

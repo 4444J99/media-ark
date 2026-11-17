@@ -43,7 +43,7 @@ Current position: **Stage 4/5 (Verification + Release prep)**.
 ### P1 (important, pre-release)
 
 - [x] Health/telemetry hardening for persisted platform action evidence
-- [ ] Data-store durability and backup/restore instructions for `.capture-automation`
+- [ ] Data-store durability and backup/restore instructions for `.media-ark`
 - [x] Security hardening for endpoint inputs and run-time boundaries
 - [ ] Operations playbook for common failure modes
 

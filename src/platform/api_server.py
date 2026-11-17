@@ -7,9 +7,10 @@ import json
 import mimetypes
 import os
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from urllib.parse import parse_qs, urlparse
 
 # Ensure the `media_ark` brand module is importable when this file is
@@ -21,6 +22,13 @@ if str(_SRC) not in sys.path:
 
 from media_ark import BRAND_SERVER_VERSION, env_key  # noqa: E402
 
+from .auth import (  # noqa: E402
+    AuthConflictError,
+    AuthCredentialsError,
+    AuthError,
+    AuthStore,
+    AuthUser,
+)
 from .config import (  # noqa: E402
     PlatformValidationError,
     coerce_int,
@@ -30,10 +38,32 @@ from .config import (  # noqa: E402
     validate_choice,
     validate_query,
 )
-from .runtime import load_snapshot, run_capture_action  # noqa: E402
+from .export import ExportError, build_export, extract_request_token, load_pro_tokens  # noqa: E402
+from .license import load_license_pubkey, verify_license  # noqa: E402
+from .quota import QuotaExceeded, QuotaStore, directory_size  # noqa: E402
+from .runtime import _coerce_bool, load_snapshot, run_capture_action  # noqa: E402
 
 
 MAX_JSON_BODY_BYTES = 1_000_000
+PUBLIC_API_ROUTES = {
+    ("POST", "/api/auth/register"),
+    ("POST", "/api/auth/login"),
+}
+
+# Modes that drive the capture pipeline and therefore run OCR (unless the
+# caller opts out with no_ocr). Used to decide whether a /api/run request
+# consumes an OCR call against the user's monthly budget.
+_OCR_MODES = {"process", "run", "once"}
+
+_QUOTA_STORE = QuotaStore()
+
+
+def _quota_store() -> QuotaStore:
+    return _QUOTA_STORE
+
+
+def _write_quota_error(handler: BaseHTTPRequestHandler, exc: QuotaExceeded) -> None:
+    _write_json(handler, 429, exc.to_payload())
 
 
 class RequestValidationError(ValueError):
@@ -53,13 +83,18 @@ def _json(value: Dict[str, Any]) -> str:
 
 
 def _write_json(
-    handler: BaseHTTPRequestHandler, status: int, payload: Dict[str, Any]
+    handler: BaseHTTPRequestHandler,
+    status: int,
+    payload: Dict[str, Any],
+    headers: Optional[Dict[str, str]] = None,
 ) -> None:
     encoded = _json(payload).encode("utf-8")
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json; charset=utf-8")
     handler.send_header("Content-Length", str(len(encoded)))
     handler.send_header("Cache-Control", "no-store")
+    for key, value in (headers or {}).items():
+        handler.send_header(key, value)
     handler.end_headers()
     handler.wfile.write(encoded)
 
@@ -96,7 +131,11 @@ def _to_int(value: Any, default: int) -> int:
 
 
 def to_action_payload(
-    path: str, query: Dict[str, Any], method: str, body: Dict[str, Any]
+    path: str,
+    query: Dict[str, Any],
+    method: str,
+    body: Dict[str, Any],
+    user: Optional[AuthUser] = None,
 ) -> Dict[str, Any]:
     if method.upper() == "GET":
         payload = dict(query)
@@ -104,20 +143,50 @@ def to_action_payload(
         payload = dict(query)
         for key, value in body.items():
             payload[key] = value
+    default_source, default_out = _default_paths_for_user(user)
     if "source" not in payload:
-        payload.setdefault("source", str(default_source_dir()))
+        payload.setdefault("source", str(default_source))
     if "out" not in payload:
-        payload.setdefault("out", str(default_out_dir()))
+        payload.setdefault("out", str(default_out))
     payload.setdefault("mode", path.lstrip("/").split("/")[-1])
     return payload
 
 
-def _validated_paths(query: Dict[str, Any]) -> tuple[Path, Path]:
+def _is_api_path(path: str) -> bool:
+    return path == "/api" or path.startswith("/api/")
+
+
+def _is_public_api_request(method: str, path: str) -> bool:
+    route = _normalized_route(path)
+    return (method.upper(), route) in PUBLIC_API_ROUTES
+
+
+def _normalized_route(path: str) -> str:
+    return path.rstrip("/") or "/"
+
+
+def _default_paths_for_user(user: Optional[AuthUser]) -> tuple[Path, Path]:
+    if user is None:
+        return default_source_dir(), default_out_dir()
+    return user.sandbox / "source", user.sandbox / "out"
+
+
+def _auth_roots(user: Optional[AuthUser]) -> Optional[list[Path]]:
+    if user is None:
+        return None
+    return [user.sandbox]
+
+
+def _validated_paths(
+    query: Dict[str, Any], user: Optional[AuthUser] = None
+) -> tuple[Path, Path]:
+    default_source, default_out = _default_paths_for_user(user)
+    roots = _auth_roots(user)
     source = normalize_platform_path(
-        query.get("source"), default=default_source_dir(), field="source"
+        query.get("source"), default=default_source, field="source", roots=roots
     )
     out = normalize_platform_path(
-        query.get("out"), default=default_out_dir(), field="out"
+        query.get("out"), default=default_out, field="out", roots=roots
     )
     return source, out
 
@@ -128,8 +197,127 @@ def _write_validation_error(handler: BaseHTTPRequestHandler, message: str) -> No
     )
 
 
+def _auth_response_payload(user: AuthUser, api_key: Optional[str] = None) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "ok": True,
+        "user": {"id": user.id, "username": user.username},
+        "sandbox": str(user.sandbox),
+        "source": str(user.sandbox / "source"),
+        "out": str(user.sandbox / "out"),
+    }
+    if api_key is not None:
+        payload["api_key"] = api_key
+    return payload
+
+
 class DashboardRequestHandler(BaseHTTPRequestHandler):
     server_version = BRAND_SERVER_VERSION
+    auth_user: Optional[AuthUser] = None
+
+    def _auth_store(self) -> AuthStore:
+        store = getattr(self.server, "auth_store", None)
+        if store is None:
+            store = AuthStore()
+            setattr(self.server, "auth_store", store)
+        return store
+
+    def _write_auth_required(self, message: str = "missing bearer token") -> None:
+        _write_json(
+            self,
+            401,
+            {"ok": False, "error": "unauthorized", "message": message},
+            headers={"WWW-Authenticate": 'Bearer realm="media-ark"'},
+        )
+
+    def _authenticate_api_request(self, method: str, path: str) -> bool:
+        self.auth_user = None
+        if _is_public_api_request(method, path):
+            return True
+
+        authorization = self.headers.get("Authorization", "")
+        scheme, _, token = authorization.partition(" ")
+        if scheme.lower() != "bearer" or not token.strip():
+            self._write_auth_required()
+            return False
+
+        user = self._auth_store().authenticate_api_key(token.strip())
+        if user is None:
+            self._write_auth_required("invalid bearer token")
+            return False
+
+        self.auth_user = user
+        return True
+
+    def _read_auth_body(self) -> Dict[str, Any]:
+        body = _read_json_body(self)
+        if "username" not in body or "password" not in body:
+            raise RequestValidationError("username and password are required")
+        return body
+
+    def _handle_register(self) -> None:
+        try:
+            body = self._read_auth_body()
+            user, api_key = self._auth_store().register(
+                body.get("username"), body.get("password")
+            )
+        except RequestValidationError as exc:
+            _write_validation_error(self, str(exc))
+            return
+        except AuthConflictError as exc:
+            _write_json(
+                self,
+                409,
+                {"ok": False, "error": exc.error, "message": str(exc)},
+            )
+            return
+        except AuthError as exc:
+            _write_json(
+                self,
+                400,
+                {"ok": False, "error": exc.error, "message": str(exc)},
+            )
+            return
+        _write_json(self, 201, _auth_response_payload(user, api_key))
+
+    def _handle_login(self) -> None:
+        try:
+            body = self._read_auth_body()
+            user, api_key = self._auth_store().login(
+                body.get("username"), body.get("password")
+            )
+        except RequestValidationError as exc:
+            _write_validation_error(self, str(exc))
+            return
+        except AuthCredentialsError as exc:
+            _write_json(
+                self,
+                401,
+                {"ok": False, "error": exc.error, "message": str(exc)},
+            )
+            return
+        except AuthError as exc:
+            _write_json(
+                self,
+                400,
+                {"ok": False, "error": exc.error, "message": str(exc)},
+            )
+            return
+        _write_json(self, 200, _auth_response_payload(user, api_key))
+
+    def _handle_api_key(self) -> None:
+        if self.auth_user is None:
+            self._write_auth_required()
+            return
+        try:
+            user, api_key = self._auth_store().rotate_api_key(self.auth_user.id)
+        except AuthError as exc:
+            _write_json(
+                self,
+                401,
+                {"ok": False, "error": exc.error, "message": str(exc)},
+            )
+            return
+        _write_json(self, 200, _auth_response_payload(user, api_key))
 
     def _read_query(self) -> Dict[str, Any]:
         parsed = urlparse(self.path)
@@ -143,6 +331,48 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
             else:
                 normalized[key] = value
         return normalized
+
+    def _identify_user(self) -> str:
+        """The quota subject: the authenticated user's id, as a string.
+
+        Every ``/api/*`` route that consumes or reports quota runs behind
+        the AuthStore bearer gate, so ``self.auth_user`` is populated by the
+        time we get here. Returned as ``str`` because the ledger keys users
+        by string (``AuthUser.id`` is an int; JSON object keys are strings).
+
+        The tier is deliberately **not** read from a client header -- a
+        ``X-User-Tier: pro`` header would hand anyone the pro budget. Tier
+        lives in the ledger and is granted by a verified MONETA licence (see
+        the planned ``/api/license`` endpoint). Falls back to a shared
+        ``anonymous`` bucket only as defense in depth.
+        """
+
+        if self.auth_user is not None:
+            return str(self.auth_user.id)
+        return "anonymous"
+
+    def _enforce_quota(
+        self, *, api_calls: int = 1, ocr_calls: int = 0, storage_bytes: int | None = None
+    ) -> bool:
+        """Consume quota for this request; write a 429 and return False if over.
+
+        The tier is whatever the ledger already records for this user (free
+        by default, upgraded to pro by a verified MONETA licence); it is not
+        supplied per-request.
+        """
+
+        user_id = self._identify_user()
+        try:
+            _quota_store().consume(
+                user_id,
+                api_calls=api_calls,
+                ocr_calls=ocr_calls,
+                storage_bytes=storage_bytes,
+            )
+        except QuotaExceeded as exc:
+            _write_quota_error(self, exc)
+            return False
+        return True
 
     def _serve_static(self, parsed_path: str) -> None:
         safe_name = parsed_path.lstrip("/")
@@ -168,12 +398,74 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(content)
 
+    def _handle_export(self, parsed: Any) -> None:
+        fmt = parsed.path[len("/api/export/") :].strip("/")
+        query = self._read_query()
+        try:
+            out = normalize_platform_path(
+                query.get("out"),
+                default=_default_paths_for_user(self.auth_user)[1],
+                field="out",
+                roots=_auth_roots(self.auth_user),
+            )
+        except PlatformValidationError as exc:
+            _write_validation_error(self, str(exc))
+            return
+        pro_tokens = load_pro_tokens(os.environ)
+        token = extract_request_token(self.headers, query, pro_tokens=pro_tokens)
+        try:
+            content, content_type, filename = build_export(
+                fmt, out, token=token, env=dict(os.environ), user=self.auth_user
+            )
+        except ExportError as exc:
+            _write_json(
+                self,
+                exc.status,
+                {"ok": False, "error": exc.error, "message": exc.message},
+            )
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header(
+            "Content-Disposition", f'attachment; filename="{filename}"'
+        )
+        self.send_header("Content-Length", str(len(content)))
+        self.end_headers()
+        self.wfile.write(content)
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+        if _is_api_path(parsed.path) and not self._authenticate_api_request(
+            "GET", parsed.path
+        ):
+            return
+
+        if parsed.path.startswith("/api/export/"):
+            self._handle_export(parsed)
+            return
+
+        if parsed.path.startswith("/api/quota"):
+            # Reading your own meter is free -- it must not be the thing that
+            # pushes you over the call budget. Behind the bearer gate, so the
+            # subject is the authenticated user.
+            user_id = self._identify_user()
+            usage = _quota_store().get_usage(user_id)
+            _write_json(
+                self,
+                200,
+                {
+                    "ok": True,
+                    "user": user_id,
+                    "tier": usage.tier,
+                    "usage": usage.to_dict(),
+                },
+            )
+            return
+
         if parsed.path.startswith("/api/status"):
             query = self._read_query()
             try:
-                source, out = _validated_paths(query)
+                source, out = _validated_paths(query, self.auth_user)
             except PlatformValidationError as exc:
                 _write_validation_error(self, str(exc))
                 return
@@ -190,7 +482,7 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/api/index"):
             query = self._read_query()
             try:
-                _, out = _validated_paths(query)
+                _, out = _validated_paths(query, self.auth_user)
                 limit = coerce_int(
                     query.get("limit", 25),
                     field="limit",
@@ -258,7 +550,10 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
             query = self._read_query()
             try:
                 out = normalize_platform_path(
-                    query.get("out"), default=default_out_dir(), field="out"
+                    query.get("out"),
+                    default=_default_paths_for_user(self.auth_user)[1],
+                    field="out",
+                    roots=_auth_roots(self.auth_user),
                 )
             except PlatformValidationError as exc:
                 _write_validation_error(self, str(exc))
@@ -269,9 +564,77 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
 
         self._serve_static(parsed.path)
 
+    def _handle_license(self) -> None:
+        """Verify a MONETA-signed Pro licence and upgrade the caller's tier.
+
+        Fully offline: the licence is checked against the embedded MONETA
+        public key (``MEDIA_ARK_LICENSE_PUBKEY``) -- no processor, no network.
+        Runs behind the bearer gate, so the grant lands on the authenticated
+        user. A valid, unexpired ``pro`` licence sets their ledger tier to
+        pro -- the ONLY path to pro (a client ``X-User-Tier`` header cannot
+        grant it; tier is not read from request headers at all).
+        """
+
+        try:
+            body = _read_json_body(self)
+        except RequestValidationError as exc:
+            _write_validation_error(self, str(exc))
+            return
+        token = str(body.get("license", "") or "").strip()
+        if not token:
+            _write_validation_error(self, "license is required")
+            return
+        pubkey = load_license_pubkey()
+        if pubkey is None:
+            _write_json(
+                self,
+                503,
+                {
+                    "ok": False,
+                    "error": "license_verification_unavailable",
+                    "message": "no MONETA public key configured for this build",
+                },
+            )
+            return
+        result = verify_license(token, pubkey, now_s=int(time.time()))
+        if not result.valid:
+            _write_json(
+                self,
+                400,
+                {"ok": False, "error": "invalid_license", "reason": result.reason},
+            )
+            return
+        user_id = self._identify_user()
+        _quota_store().set_tier(user_id, "pro")
+        usage = _quota_store().get_usage(user_id)
+        _write_json(
+            self, 200, {"ok": True, "tier": usage.tier, "usage": usage.to_dict()}
+        )
+
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
         route = parsed.path.rstrip("/")
+        if _is_api_path(parsed.path) and not self._authenticate_api_request(
+            "POST", parsed.path
+        ):
+            return
+
+        if route == "/api/auth/register":
+            self._handle_register()
+            return
+
+        if route == "/api/auth/login":
+            self._handle_login()
+            return
+
+        if route == "/api/auth/api-key":
+            self._handle_api_key()
+            return
+
+        if route == "/api/license":
+            self._handle_license()
+            return
+
         if route != "/api/run":
             self.send_error(404, "not found")
             return
@@ -281,10 +644,43 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
             _write_validation_error(self, str(exc))
             return
         query = self._read_query()
-        payload = to_action_payload("run", query=query, body=body, method="POST")
+        payload = to_action_payload(
+            "run", query=query, body=body, method="POST", user=self.auth_user
+        )
         action = str(payload.get("action", payload.get("mode", "process")))
         payload["mode"] = action
-        result = run_capture_action(payload)
+        # OCR runs for the capture pipeline modes unless the caller opts
+        # out; charge an OCR call only when it will actually happen.
+        no_ocr = _coerce_bool(payload.get("no_ocr", payload.get("noOcr", False)))
+        ocr_calls = 1 if (action in _OCR_MODES and not no_ocr) else 0
+
+        # Measure the user's archive before running so an already-overflowing
+        # archive is rejected up front. Uses the sandbox-scoped out path; a
+        # bad path is left to run_capture_action to validate and report.
+        out_for_storage: int | None = None
+        try:
+            out_for_storage = directory_size(
+                normalize_platform_path(
+                    payload.get("out"),
+                    default=_default_paths_for_user(self.auth_user)[1],
+                    field="out",
+                    roots=_auth_roots(self.auth_user),
+                )
+            )
+        except PlatformValidationError:
+            out_for_storage = None
+
+        if not self._enforce_quota(
+            api_calls=1, ocr_calls=ocr_calls, storage_bytes=out_for_storage
+        ):
+            return
+
+        result = run_capture_action(payload, roots=_auth_roots(self.auth_user))
+
+        # Reflect the post-run archive size so the next request sees it.
+        if result.ok and result.out:
+            user_id = self._identify_user()
+            _quota_store().update_storage(user_id, directory_size(Path(result.out)))
         response: Dict[str, Any] = {
             "mode": action,
             "ok": result.ok,

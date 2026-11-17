@@ -1,11 +1,12 @@
 const state = {
-  defaultSource: 'data/captures/raw',
-  defaultOut: '.media-ark',
+  apiKey: localStorage.getItem('mediaArkApiKey') || '',
+  defaultSource: localStorage.getItem('mediaArkSource') || 'data/captures/raw',
+  defaultOut: localStorage.getItem('mediaArkOut') || '.media-ark',
   user: null,
   quotaUsed: 0,
+  proEnabled: false,
 };
 
-const AUTH_STORAGE_KEY = 'mediaArk.dashboard.auth';
 const QUOTA_WARN_PERCENT = 80;
 
 const PRO_FEATURE_FLAGS = {
@@ -18,7 +19,7 @@ const PRO_FEATURE_FLAGS = {
 const PLAN_CONFIG = {
   free: {
     label: 'Starter',
-    quota: 100,
+    quota: 1000,
     maxFilesPerRun: 25,
     flags: {
       advancedFilters: false,
@@ -29,7 +30,7 @@ const PLAN_CONFIG = {
   },
   pro: {
     label: 'Pro',
-    quota: 1000,
+    quota: 100000,
     maxFilesPerRun: 50000,
     flags: {
       advancedFilters: true,
@@ -44,49 +45,29 @@ function el(selector) {
   return document.querySelector(selector);
 }
 
+function isAuthenticated() {
+  return Boolean(state.apiKey);
+}
+
 function activePlan() {
-  if (!state.user) {
-    return PLAN_CONFIG.free;
-  }
-  return PLAN_CONFIG[state.user.plan] || PLAN_CONFIG.free;
+  return state.proEnabled ? PLAN_CONFIG.pro : PLAN_CONFIG.free;
 }
 
 function activeFlags() {
   return activePlan().flags;
 }
 
-function isAuthenticated() {
-  return Boolean(state.user?.email);
-}
-
-function safeStorageGet(key) {
-  try {
-    return window.localStorage.getItem(key);
-  } catch (error) {
-    return null;
-  }
-}
-
-function safeStorageSet(key, value) {
-  try {
-    window.localStorage.setItem(key, value);
-  } catch (error) {
-    // Local storage can be unavailable in hardened browser modes.
-  }
-}
-
-function safeStorageRemove(key) {
-  try {
-    window.localStorage.removeItem(key);
-  } catch (error) {
-    // Local storage can be unavailable in hardened browser modes.
-  }
-}
-
 async function requestJson(url, options = {}) {
+  const headers = {
+    'content-type': 'application/json',
+    ...(options.headers || {}),
+  };
+  if (state.apiKey && !headers.Authorization) {
+    headers.Authorization = `Bearer ${state.apiKey}`;
+  }
   const response = await fetch(url, {
-    headers: { 'content-type': 'application/json' },
     ...options,
+    headers,
   });
   const payload = await response.json();
   if (!response.ok) {
@@ -106,32 +87,19 @@ function currentPayload() {
 }
 
 function injectDashboardStyles() {
-  if (el('#dashboardAuthStyles')) {
+  if (el('#dashboardProStyles')) {
     return;
   }
   const style = document.createElement('style');
-  style.id = 'dashboardAuthStyles';
+  style.id = 'dashboardProStyles';
   style.textContent = `
-    .auth-card,
-    .pro-feature-card {
-      margin-bottom: 12px;
-    }
-
-    .auth-layout {
-      display: grid;
-      grid-template-columns: minmax(240px, 1fr) minmax(240px, 1fr);
-      gap: 12px;
-      align-items: start;
-    }
-
-    .auth-status,
     .quota-status,
     .feature-note {
       color: #cbd5e1;
       margin: 6px 0 10px;
     }
 
-    .auth-status.error,
+    .auth-error,
     .quota-status.warn {
       color: #fbbf24;
     }
@@ -157,7 +125,7 @@ function injectDashboardStyles() {
 
     .feature-flags {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
       gap: 8px;
     }
 
@@ -187,11 +155,7 @@ function injectDashboardStyles() {
       color: #86efac;
     }
 
-    .feature-flag.locked span {
-      color: #cbd5e1;
-    }
-
-    .dashboard-locked section:not(#authPanel):not(#proFeaturePanel) {
+    .dashboard-locked .card:not(.auth-section) {
       opacity: 0.55;
     }
 
@@ -203,11 +167,6 @@ function injectDashboardStyles() {
     }
 
     @media (max-width: 700px) {
-      .auth-layout,
-      .quota-stats {
-        grid-template-columns: 1fr;
-      }
-
       .quota-stats {
         display: grid;
       }
@@ -216,67 +175,42 @@ function injectDashboardStyles() {
   document.head.appendChild(style);
 }
 
-function injectAuthUi() {
-  if (el('#authPanel')) {
+function injectProUi() {
+  if (el('#quotaPanel')) {
     return;
   }
   injectDashboardStyles();
-  const header = el('header');
-  header.insertAdjacentHTML(
-    'afterend',
+  el('#authUsername')?.closest('.card')?.classList.add('auth-section');
+  const grid = el('.grid');
+  grid.insertAdjacentHTML(
+    'beforeend',
     `
-    <section id="authPanel" class="card auth-card">
-      <div class="auth-layout">
-        <form id="userAuthForm">
-          <h2>User Auth</h2>
-          <p id="authStatus" class="auth-status">Signed out</p>
-          <div class="row">
-            <label for="authEmail">Email</label>
-            <input id="authEmail" type="email" autocomplete="email" data-auth-control />
-          </div>
-          <div class="row">
-            <label for="authToken">Access key</label>
-            <input id="authToken" type="password" autocomplete="current-password" data-auth-control />
-          </div>
-          <div class="row">
-            <label for="authPlan">Plan</label>
-            <select id="authPlan" data-auth-control>
-              <option value="free">Starter</option>
-              <option value="pro">Pro</option>
-            </select>
-          </div>
-          <div class="btn-row">
-            <button type="submit" data-auth-control>Sign in</button>
-            <button type="button" data-action="auth-signout" data-auth-control>Sign out</button>
-          </div>
-        </form>
-        <div id="quotaPanel">
-          <h2>Quota</h2>
-          <p id="quotaStatus" class="quota-status">Sign in to load quota.</p>
-          <progress id="quotaMeter" class="quota-meter" max="100" value="0"></progress>
-          <div class="quota-stats">
-            <span id="quotaUsage">0 / 100 records</span>
-            <span id="quotaPercent">0%</span>
-          </div>
+      <article id="quotaPanel" class="card" hidden>
+        <h2>Quota</h2>
+        <p id="quotaStatus" class="quota-status">Sign in to load quota.</p>
+        <progress id="quotaMeter" class="quota-meter" max="100" value="0"></progress>
+        <div class="quota-stats">
+          <span id="quotaUsage">0 / 1000 records</span>
+          <span id="quotaPercent">0%</span>
         </div>
-      </div>
-    </section>
-    <section id="proFeaturePanel" class="card pro-feature-card">
-      <h2>Pro Feature Flags</h2>
-      <p id="featureNote" class="feature-note">Sign in to evaluate feature flags.</p>
-      <div id="featureFlags" class="feature-flags"></div>
-    </section>
+      </article>
+      <article id="proFeaturePanel" class="card" hidden>
+        <h2>Pro Feature Flags</h2>
+        <p id="featureNote" class="feature-note">Sign in to evaluate feature flags.</p>
+        <div id="featureFlags" class="feature-flags"></div>
+      </article>
     `,
   );
 }
 
 function renderStatus(payload) {
   state.quotaUsed = Number(payload.index_rows || 0);
+  state.proEnabled = Boolean(payload.pro);
   el('#sourceStatus').textContent = payload.source || '-';
   el('#outStatus').textContent = payload.out || '-';
   el('#manifestStatus').textContent = payload.manifest_exists ? 'present' : 'missing';
   el('#indexRows').textContent = String(payload.index_rows || 0);
-  renderQuota();
+  renderAuthDependentUi();
 }
 
 function renderResults(payload) {
@@ -288,36 +222,24 @@ function renderLastRun(payload) {
   el('#lastRun').textContent = JSON.stringify(payload, null, 2);
 }
 
+function renderAuthStatus(text) {
+  const target = el('#authStatus');
+  if (target) {
+    target.textContent = text;
+    target.classList.remove('auth-error');
+  }
+}
+
+function renderAuthError(text) {
+  const target = el('#authStatus');
+  if (target) {
+    target.textContent = text;
+    target.classList.add('auth-error');
+  }
+}
+
 function onError(error) {
   el('#lastRun').textContent = `${new Date().toISOString()}\n${String(error.message || error)}`;
-}
-
-function renderAuth(message = '') {
-  const status = el('#authStatus');
-  const signOutButton = el('[data-action="auth-signout"]');
-  if (!status || !signOutButton) {
-    return;
-  }
-  status.classList.remove('error');
-  if (isAuthenticated()) {
-    const plan = activePlan();
-    status.textContent = message || `Signed in as ${state.user.email} (${plan.label})`;
-    el('#authEmail').value = state.user.email;
-    el('#authPlan').value = state.user.plan;
-    signOutButton.disabled = false;
-  } else {
-    status.textContent = message || 'Signed out';
-    signOutButton.disabled = true;
-  }
-}
-
-function renderAuthError(message) {
-  const status = el('#authStatus');
-  if (!status) {
-    return;
-  }
-  status.textContent = message;
-  status.classList.add('error');
 }
 
 function renderFeatureFlags() {
@@ -379,6 +301,58 @@ function renderQuota() {
   }
 }
 
+function isAuthControl(control) {
+  if (control.id === 'authUsername' || control.id === 'authPassword') {
+    return true;
+  }
+  return ['register', 'login', 'rotate-api-key', 'sign-out'].includes(control.dataset?.action);
+}
+
+function applyAccessControls() {
+  const signedIn = isAuthenticated();
+  const flags = activeFlags();
+  const plan = activePlan();
+
+  document.querySelectorAll('button, input, select').forEach((control) => {
+    if (!isAuthControl(control)) {
+      control.disabled = !signedIn;
+    }
+  });
+
+  const rotateButton = el('[data-action="rotate-api-key"]');
+  const signOutButton = el('[data-action="sign-out"]');
+  if (rotateButton) {
+    rotateButton.disabled = !signedIn;
+  }
+  if (signOutButton) {
+    signOutButton.disabled = !signedIn;
+  }
+
+  const mediaFilter = el('#queryMedia');
+  const statusFilter = el('#queryStatus');
+  if (mediaFilter && statusFilter && signedIn && !flags.advancedFilters) {
+    mediaFilter.value = 'all';
+    statusFilter.value = 'all';
+    mediaFilter.disabled = true;
+    statusFilter.disabled = true;
+  }
+
+  const verifyButton = el('[data-action="verify"]');
+  if (verifyButton) {
+    verifyButton.disabled = !signedIn || !flags.verificationReports;
+  }
+
+  const maxFiles = el('#maxFiles');
+  if (maxFiles && signedIn) {
+    maxFiles.min = '1';
+    maxFiles.max = String(plan.maxFilesPerRun);
+    const current = Number(maxFiles.value || 0);
+    if (current === 0 || current > plan.maxFilesPerRun) {
+      maxFiles.value = String(plan.maxFilesPerRun);
+    }
+  }
+}
+
 function renderAuthDependentUi() {
   const signedIn = isAuthenticated();
   const quotaPanel = el('#quotaPanel');
@@ -391,70 +365,9 @@ function renderAuthDependentUi() {
   if (proFeaturePanel) {
     proFeaturePanel.hidden = !signedIn;
   }
-  renderAuth();
   renderFeatureFlags();
   renderQuota();
   applyAccessControls();
-}
-
-function restoreAuthSession() {
-  const raw = safeStorageGet(AUTH_STORAGE_KEY);
-  if (!raw) {
-    return;
-  }
-  try {
-    const session = JSON.parse(raw);
-    const plan = PLAN_CONFIG[session.plan] ? session.plan : 'free';
-    if (typeof session.email === 'string' && session.email.includes('@')) {
-      state.user = {
-        email: session.email,
-        plan,
-        signedInAt: session.signedInAt || new Date().toISOString(),
-      };
-    }
-  } catch (error) {
-    safeStorageRemove(AUTH_STORAGE_KEY);
-  }
-}
-
-function persistAuthSession() {
-  if (!state.user) {
-    safeStorageRemove(AUTH_STORAGE_KEY);
-    return;
-  }
-  safeStorageSet(AUTH_STORAGE_KEY, JSON.stringify(state.user));
-}
-
-function signOut() {
-  state.user = null;
-  state.quotaUsed = 0;
-  persistAuthSession();
-  renderAuthDependentUi();
-}
-
-async function signIn() {
-  const email = el('#authEmail').value.trim();
-  const token = el('#authToken').value.trim();
-  const plan = PLAN_CONFIG[el('#authPlan').value] ? el('#authPlan').value : 'free';
-
-  if (!email || !email.includes('@')) {
-    renderAuthError('Enter a valid email.');
-    return;
-  }
-  if (token.length < 4) {
-    renderAuthError('Enter an access key.');
-    return;
-  }
-
-  state.user = {
-    email,
-    plan,
-    signedInAt: new Date().toISOString(),
-  };
-  el('#authToken').value = '';
-  persistAuthSession();
-  renderAuthDependentUi();
-  await loadDashboard();
 }
 
 function requireUserAuth() {
@@ -467,7 +380,7 @@ function requireUserAuth() {
     error: 'auth_required',
     message: 'Sign in before using dashboard actions.',
   });
-  applyAccessControls();
+  renderAuthDependentUi();
   return false;
 }
 
@@ -489,55 +402,67 @@ function payloadForAction(action) {
     throw new Error('Quota reached. Processing is paused until usage is reduced or the plan changes.');
   }
 
-  const plan = activePlan();
-  const flags = activeFlags();
-  const runLimit = flags.bulkProcessing ? remaining : Math.min(remaining, plan.maxFilesPerRun);
+  const runLimit = Math.min(remaining, activePlan().maxFilesPerRun);
   if (!payload.max_files || payload.max_files > runLimit) {
     payload.max_files = runLimit;
   }
   return payload;
 }
 
-function applyAccessControls() {
-  const signedIn = isAuthenticated();
-  const flags = activeFlags();
-  const plan = activePlan();
-  const dashboardControls = Array.from(document.querySelectorAll('button, input, select')).filter(
-    (control) => !control.dataset.authControl,
-  );
+function applyAuth(payload) {
+  state.apiKey = payload.api_key || state.apiKey;
+  state.defaultSource = payload.source || state.defaultSource;
+  state.defaultOut = payload.out || state.defaultOut;
+  state.user = payload.user || state.user;
+  localStorage.setItem('mediaArkApiKey', state.apiKey);
+  localStorage.setItem('mediaArkSource', state.defaultSource);
+  localStorage.setItem('mediaArkOut', state.defaultOut);
+  el('#sourcePath').value = state.defaultSource;
+  el('#outPath').value = state.defaultOut;
+  renderAuthStatus(`Signed in as ${payload.user?.username || 'user'}`);
+  renderAuthDependentUi();
+}
 
-  dashboardControls.forEach((control) => {
-    control.disabled = !signedIn;
+function authPayload() {
+  return {
+    username: el('#authUsername').value.trim(),
+    password: el('#authPassword').value,
+  };
+}
+
+async function registerAccount() {
+  const payload = await requestJson('/api/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(authPayload()),
   });
+  applyAuth(payload);
+  await loadDashboard();
+}
 
-  const mediaFilter = el('#queryMedia');
-  const statusFilter = el('#queryStatus');
-  if (mediaFilter && statusFilter && signedIn && !flags.advancedFilters) {
-    mediaFilter.value = 'all';
-    statusFilter.value = 'all';
-    mediaFilter.disabled = true;
-    statusFilter.disabled = true;
-  }
+async function loginAccount() {
+  const payload = await requestJson('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(authPayload()),
+  });
+  applyAuth(payload);
+  await loadDashboard();
+}
 
-  const verifyButton = el('[data-action="verify"]');
-  if (verifyButton) {
-    verifyButton.disabled = !signedIn || !flags.verificationReports;
-  }
+async function rotateApiKey() {
+  const payload = await requestJson('/api/auth/api-key', { method: 'POST' });
+  applyAuth(payload);
+  renderLastRun({ ok: true, api_key_rotated: true, user: payload.user });
+  await loadDashboard();
+}
 
-  const maxFiles = el('#maxFiles');
-  if (maxFiles && signedIn) {
-    if (flags.bulkProcessing) {
-      maxFiles.min = '0';
-      maxFiles.max = String(plan.maxFilesPerRun);
-    } else {
-      maxFiles.min = '1';
-      maxFiles.max = String(plan.maxFilesPerRun);
-      const current = Number(maxFiles.value || 0);
-      if (current === 0 || current > plan.maxFilesPerRun) {
-        maxFiles.value = String(plan.maxFilesPerRun);
-      }
-    }
-  }
+function signOut() {
+  state.apiKey = '';
+  state.user = null;
+  state.quotaUsed = 0;
+  state.proEnabled = false;
+  localStorage.removeItem('mediaArkApiKey');
+  renderAuthStatus('Signed out');
+  renderAuthDependentUi();
 }
 
 async function refreshStatus() {
@@ -604,14 +529,6 @@ async function runQuery() {
 }
 
 function bindActions() {
-  document.body.addEventListener('submit', (event) => {
-    if (event.target?.id !== 'userAuthForm') {
-      return;
-    }
-    event.preventDefault();
-    signIn().catch(onError);
-  });
-
   document.body.addEventListener('click', (event) => {
     const target = event.target?.closest?.('[data-action]');
     const action = target?.dataset?.action;
@@ -619,7 +536,19 @@ function bindActions() {
       return;
     }
     event.preventDefault();
-    if (action === 'auth-signout') {
+    if (action === 'register') {
+      registerAccount().catch(onError);
+      return;
+    }
+    if (action === 'login') {
+      loginAccount().catch(onError);
+      return;
+    }
+    if (action === 'rotate-api-key') {
+      rotateApiKey().catch(onError);
+      return;
+    }
+    if (action === 'sign-out') {
       signOut();
       return;
     }
@@ -646,25 +575,32 @@ function bindActions() {
   });
 }
 
-async function loadDashboard() {
-  if (!isAuthenticated()) {
-    return;
-  }
-  await refreshStatus();
-  await refreshIndex().catch(() => {});
-}
-
 async function bootstrap() {
-  injectAuthUi();
-  restoreAuthSession();
+  injectProUi();
+  el('#sourcePath').value = state.defaultSource;
+  el('#outPath').value = state.defaultOut;
   bindActions();
-  renderAuthDependentUi();
-  await loadDashboard();
+  if (state.apiKey) {
+    renderAuthStatus('Signed in');
+    await loadDashboard();
+  } else {
+    renderAuthStatus('Signed out');
+    renderAuthDependentUi();
+  }
   setInterval(() => {
     if (isAuthenticated()) {
       refreshStatus().catch(() => {});
     }
   }, 8000);
+}
+
+async function loadDashboard() {
+  if (!isAuthenticated()) {
+    renderAuthDependentUi();
+    return;
+  }
+  await refreshStatus();
+  await refreshIndex().catch(() => {});
 }
 
 window.addEventListener('load', () => {

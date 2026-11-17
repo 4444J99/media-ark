@@ -148,6 +148,8 @@ class TestCliSmoke(unittest.TestCase):
                     "MEDIA_ARK_PORT": str(port),
                     "MEDIA_ARK_SOURCE": str(root / "source"),
                     "MEDIA_ARK_OUT": str(root / "out"),
+                    "MEDIA_ARK_USERS_DB": str(root / "auth" / "users.db"),
+                    "MEDIA_ARK_USER_SANDBOX_ROOT": str(root / "auth" / "sandboxes"),
                 }
             )
             proc = subprocess.Popen(
@@ -165,10 +167,6 @@ class TestCliSmoke(unittest.TestCase):
                 while time.time() < deadline:
                     try:
                         with urllib.request.urlopen(
-                            f"http://127.0.0.1:{port}/api/status", timeout=1
-                        ) as response:
-                            status_payload = json.loads(response.read().decode("utf-8"))
-                        with urllib.request.urlopen(
                             f"http://127.0.0.1:{port}/", timeout=1
                         ) as response:
                             page_text = response.read().decode("utf-8")
@@ -178,11 +176,36 @@ class TestCliSmoke(unittest.TestCase):
                             break
                         time.sleep(0.25)
 
-                if status_payload is None:
+                if not page_text:
                     stdout, stderr = proc.communicate(timeout=5)
                     self.fail(
                         f"platform start did not become ready\nstdout={stdout}\nstderr={stderr}"
                     )
+
+                if status_payload is None:
+                    register_request = urllib.request.Request(
+                        f"http://127.0.0.1:{port}/api/auth/register",
+                        data=json.dumps(
+                            {
+                                "username": "tester",
+                                "password": "correct horse battery",
+                            }
+                        ).encode("utf-8"),
+                        method="POST",
+                        headers={"Content-Type": "application/json"},
+                    )
+                    with urllib.request.urlopen(register_request, timeout=2) as response:
+                        auth_payload = json.loads(response.read().decode("utf-8"))
+
+                    status_request = urllib.request.Request(
+                        f"http://127.0.0.1:{port}/api/status",
+                        headers={
+                            "Authorization": f"Bearer {auth_payload['api_key']}"
+                        },
+                    )
+                    with urllib.request.urlopen(status_request, timeout=2) as response:
+                        status_payload = json.loads(response.read().decode("utf-8"))
+
                 self.assertTrue(status_payload["ok"])
                 self.assertEqual(status_payload["api_version"], "1.0")
                 self.assertIn("Screen Capture Platform", page_text)

@@ -92,12 +92,12 @@ def _coerce_bool(value: Any) -> bool:
     return bool(value)
 
 
-def parse_options(payload: Dict[str, Any]) -> RunOptions:
+def parse_options(payload: Dict[str, Any], roots: Optional[List[Path]] = None) -> RunOptions:
     source = normalize_platform_path(
-        payload.get("source"), default=default_source_dir(), field="source"
+        payload.get("source"), default=default_source_dir(), field="source", roots=roots
     )
     out = normalize_platform_path(
-        payload.get("out"), default=default_out_dir(), field="out"
+        payload.get("out"), default=default_out_dir(), field="out", roots=roots
     )
     mode = validate_choice(
         str(payload.get("mode", "process")),
@@ -177,10 +177,12 @@ def parse_options(payload: Dict[str, Any]) -> RunOptions:
         event_log=normalize_optional_platform_path(
             payload.get("event_log", payload.get("eventLog")),
             field="event_log",
+            roots=roots,
         ),
         report=normalize_optional_platform_path(
             payload.get("report", payload.get("reportPath")),
             field="report",
+            roots=roots,
         ),
     )
 
@@ -229,14 +231,16 @@ def _safe_parse_json(payload: str) -> Any:
         return {"text": payload}
 
 
-def run_capture_action(payload: Dict[str, Any]) -> ActionResult:
+def run_capture_action(
+    payload: Dict[str, Any], roots: Optional[List[Path]] = None
+) -> ActionResult:
     start = time.time()
     mode = str(payload.get("mode", "process"))
     run_id = str(payload.get("run_id", payload.get("runId", "")) or "")
     source = str(payload.get("source", ""))
     out = str(payload.get("out", ""))
     try:
-        options = parse_options(payload)
+        options = parse_options(payload, roots=roots)
         run_id = options.run_id or f"run-{int(time.time())}-{uuid.uuid4().hex[:8]}"
         options.run_id = run_id
         command = build_command_for_mode(options)

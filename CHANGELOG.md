@@ -35,6 +35,19 @@ This project follows [Keep a Changelog](https://keepachangelog.com/) and uses
 - MCP tool names `capture_status`, `capture_check`, `capture_run`, `capture_verify`, `capture_query` (API contract; renaming these would break MCP clients).
 - The 12 prior closeout files in `~/.Codex/plans/` (historical record; references the old repo URL by design).
 
+### Verified
+- GitHub Actions workflow for dependabot github-actions update (#1635125501) completed successfully on main (https://github.com/4444J99/media-ark/actions/runs/39187403257). CI green after actions/setup-python and related bumps. Receipt: small progress step on near-release product.
+- Dependabot "pip in /." update (#1635125348) succeeded (https://github.com/4444J99/media-ark/actions/runs/39187400842, commit ff0d8ba4c3db12443b3b1cbd0bc7fe0c945a01d3). Receipt: green progress step on near-finished Stage 4/5 repo.
+- GitHub Actions workflow "capture-automation-ci" completed successfully on main (https://github.com/4444J99/media-ark/actions/runs/39187518823) for commit e36d4bc7b603de7ed5e2cea17bb5fe903da878ae. Receipt: green progress step confirming CI on near-finished (Stage 4/5) product.
+- capture-automation-ci completed successfully on green progress receipt commit 12b1883ca321f7644db0917074bf80adcc2c8a8c (https://github.com/4444J99/media-ark/actions/runs/39187624174). Receipt: small polish confirming green CI on near-finished Stage 4/5 media-ark.
+- capture-automation-ci completed successfully on green progress receipt commit caf2739dd994f397cf8d5bb00e22157702782475 (https://github.com/4444J99/media-ark/actions/runs/39187762061). Receipt: small polish confirming green CI on near-finished Stage 4/5 media-ark.
+- capture-automation-ci completed successfully on green progress receipt commit 2ab510f97a858a4d320e7def679f1e3ba788e239 (https://github.com/4444J99/media-ark/actions/runs/39187872664). Receipt: small polish confirming green CI on near-finished Stage 4/5 media-ark.
+- capture-automation-ci completed successfully on green progress polish commit 5fef3f443d7c9efb188f7ffbd4d46d2703339aaf (https://github.com/4444J99/media-ark/actions/runs/39187510688). Receipt: small polish (troubleshooting paths) confirming green CI on near-finished Stage 4/5 media-ark.
+- capture-automation-ci completed successfully on green progress polish commit f7cab78d8796f8f787860f29c5215bf1bb863b1a (https://github.com/4444J99/media-ark/actions/runs/39188262361). Receipt: small polish confirming green CI on near-finished Stage 4/5 media-ark after leftover path cleanup in troubleshooting.md.
+- capture-automation-ci completed successfully on green progress receipt commit b0792342ab16f3d695ab946706356cd0b0ba5516 (https://github.com/4444J99/media-ark/actions/runs/39188503022). Receipt: small polish confirming green CI on near-finished Stage 4/5 media-ark at exact head.
+- capture-automation-ci completed successfully on green progress receipt commit 2d7ee04cef62480be97f67c79d25a3b5659d41e5 (https://github.com/4444J99/media-ark/actions/runs/39188838106). Receipt: small polish confirming green CI on near-finished Stage 4/5 media-ark at exact head.
+- capture-automation-ci completed successfully on green progress receipt commit 0b615e99c3bb5d49bba7a77e79dac91350e667cf (https://github.com/4444J99/media-ark/actions/runs/39189265063). Receipt: small polish confirming green CI on near-finished Stage 4/5 media-ark at exact head.
+
 ## [0.2.0] — 2026-06-10
 
 ### Added

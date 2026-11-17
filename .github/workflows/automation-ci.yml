@@ -14,34 +14,21 @@ on:
   pull_request:
 
 jobs:
-  smoke-self-hosted:
-    name: CLI smoke (self-hosted, optional)
-    runs-on: self-hosted
-    continue-on-error: true
-    timeout-minutes: 2
-    steps:
-      - name: Echo self-hosted marker
-        run: |
-          echo "running on self-hosted runner"
-          echo "RUNNER_NAME=${RUNNER_NAME:-unset}"
-
   smoke-hosted:
     name: CLI smoke
-    needs: smoke-self-hosted
-    if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
 
@@ -58,14 +45,14 @@ jobs:
   tox-matrix:
     name: Tox matrix (py311, py314)
     needs: smoke-hosted
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
@@ -76,4 +63,4 @@ jobs:
 
       - name: Run tox matrix
         run: |
-          tox -m py311 py314
+          tox -e py311,py314
