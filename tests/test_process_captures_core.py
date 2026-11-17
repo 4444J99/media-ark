@@ -4,6 +4,7 @@ import argparse
 import contextlib
 import io
 import json
+import os
 import shlex
 import sys
 import tempfile
@@ -158,6 +159,34 @@ class TestProcessCapturesCore(unittest.TestCase):
         )
         canonical_paths = {row["canonical_path"] for row in rows}
         self.assertEqual(len(canonical_paths), 1)
+
+    def test_move_mode_removes_source_and_writes_sidecar(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source = root / "source"
+            out = root / "out"
+            source.mkdir()
+            sample = source / "Screen Shot 2026-06-10 at 11.00.00 AM.jpg"
+            sample.write_bytes(b"image-bytes")
+            manifest = _manifest(out)
+
+            stats = _run_once(source, out, manifest, do_copy=False)
+            rows = pc.load_index_records(out)
+            canonical = Path(rows[0]["canonical_path"])
+            sidecar = out / f"{canonical.name}.json"
+            source_exists = sample.exists()
+            canonical_exists = canonical.exists()
+            canonical_bytes = canonical.read_bytes()
+            sidecar_exists = sidecar.exists()
+            sidecar_payload = json.loads(sidecar.read_text(encoding="utf-8"))
+
+        self.assertEqual(stats["new"], 1)
+        self.assertFalse(source_exists)
+        self.assertTrue(canonical_exists)
+        self.assertEqual(canonical_bytes, b"image-bytes")
+        self.assertTrue(sidecar_exists)
+        self.assertEqual(sidecar_payload["canonical_path"], str(canonical))
+        self.assertEqual(sidecar_payload["source_state"]["status"], "processed")
 
     def test_processed_post_hook_results_are_persisted_to_sidecar(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -328,6 +357,114 @@ class TestProcessCapturesCore(unittest.TestCase):
         self.assertEqual(after["status"], "ok")
         self.assertEqual(rows[0]["canonical_path"], str(canonical.resolve()))
         self.assertIn(str(root / "source" / "capture.png"), manifest["processed"])
+
+    def test_prune_orphan_outputs_removes_unmapped_sidecars_and_thumbnails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out = Path(tmpdir) / "out"
+            canonical = out / "image" / "2026" / "06" / "keep.png"
+            canonical.parent.mkdir(parents=True)
+            canonical.write_bytes(b"image")
+            keep_sidecar = out / "keep.png.json"
+            keep_sidecar.write_text(
+                json.dumps({"canonical_path": str(canonical)}), encoding="utf-8"
+            )
+            orphan_sidecar = out / "orphan.png.json"
+            orphan_sidecar.write_text(
+                json.dumps({"canonical_path": str(out / "missing.png")}),
+                encoding="utf-8",
+            )
+            thumb_dir = out / "_thumbnails" / "image" / "2026" / "06"
+            thumb_dir.mkdir(parents=True)
+            keep_thumb = thumb_dir / "keep.jpg"
+            orphan_thumb = thumb_dir / "orphan.jpg"
+            keep_thumb.write_bytes(b"thumb")
+            orphan_thumb.write_bytes(b"thumb")
+
+            summary = pc.prune_orphan_outputs(out, {str(canonical)})
+            keep_sidecar_exists = keep_sidecar.exists()
+            orphan_sidecar_exists = orphan_sidecar.exists()
+            keep_thumb_exists = keep_thumb.exists()
+            orphan_thumb_exists = orphan_thumb.exists()
+
+        self.assertEqual(summary["sidecars"], 1)
+        self.assertEqual(summary["thumbnails"], 1)
+        self.assertTrue(keep_sidecar_exists)
+        self.assertFalse(orphan_sidecar_exists)
+        self.assertTrue(keep_thumb_exists)
+        self.assertFalse(orphan_thumb_exists)
+
+    def test_emit_report_writes_jsonl_rows_for_query_matches(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            report = Path(tmpdir) / "reports" / "query.jsonl"
+            payload = {
+                "mode": "query",
+                "count": 2,
+                "matches": [{"id": "one"}, {"id": "two"}],
+            }
+            stdout = io.StringIO()
+
+            with contextlib.redirect_stdout(stdout):
+                pc.emit_report(
+                    payload,
+                    json_report=True,
+                    report_path=str(report),
+                    report_format="jsonl",
+                )
+
+            stdout_rows = [json.loads(line) for line in stdout.getvalue().splitlines()]
+            file_rows = [
+                json.loads(line)
+                for line in report.read_text(encoding="utf-8").splitlines()
+            ]
+
+        expected = [{"mode": "query", "count": 2}, {"id": "one"}, {"id": "two"}]
+        self.assertEqual(stdout_rows, expected)
+        self.assertEqual(file_rows, expected)
+
+    def test_acquire_run_lock_rejects_active_lock_and_cleans_stale_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lock_path = Path(tmpdir) / "manifest.lock"
+            lock_path.write_text(
+                json.dumps(
+                    {
+                        "run_id": "active",
+                        "pid": os.getpid(),
+                        "started_at_epoch": pc.time.time(),
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(SystemExit):
+                with pc.acquire_run_lock(
+                    lock_path,
+                    run_id="blocked",
+                    timeout_seconds=0,
+                    stale_seconds=3600,
+                ):
+                    pass
+
+            lock_path.write_text(
+                json.dumps(
+                    {
+                        "run_id": "stale",
+                        "pid": 0,
+                        "started_at_epoch": 0,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with pc.acquire_run_lock(
+                lock_path,
+                run_id="replacement",
+                timeout_seconds=0,
+                stale_seconds=1,
+            ):
+                payload = json.loads(lock_path.read_text(encoding="utf-8"))
+                self.assertEqual(payload["run_id"], "replacement")
+
+        self.assertFalse(lock_path.exists())
 
 
 if __name__ == "__main__":

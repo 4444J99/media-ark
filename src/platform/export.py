@@ -34,6 +34,12 @@ _SRC = Path(__file__).resolve().parents[1]
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
+# Ensure the `media_ark` brand module is importable when this module is
+# imported as `src.platform.export`.
+_SRC = Path(__file__).resolve().parents[1]
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
 from media_ark import BRAND_NAME, env_key
 
 if TYPE_CHECKING:
