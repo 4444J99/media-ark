@@ -113,7 +113,8 @@ Operational HTTP API requests use local user API keys:
 
 - Public endpoints: `POST /api/auth/register`, `POST /api/auth/login`.
 - Protected endpoints: `GET /api/status`, `GET /api/manifest`,
-  `GET /api/index`, `POST /api/auth/api-key`, `POST /api/run`.
+  `GET /api/index`, `POST /api/auth/api-key`, `POST /api/run`,
+  `GET /api/export/csv`, `GET /api/export/json`, `GET /api/export/zip`.
 - Send protected requests with `Authorization: Bearer <api_key>`.
 - Registration, login, and key rotation return the new API key in the response.
 - Login and `POST /api/auth/api-key` rotate the key and invalidate the previous
@@ -121,13 +122,16 @@ Operational HTTP API requests use local user API keys:
 - API keys are stored as SHA-256 digests, not plaintext.
 - Passwords are stored as salted PBKDF2-HMAC-SHA256 hashes.
 
-Pro export endpoints use pro export tokens:
+Pro export endpoints use pro export tokens in addition to the user bearer
+key: the bearer <redacted> authenticates the user and scopes the request to
+that user's sandbox, and the pro token authorizes the pro tier.
 
 - Export endpoints: `GET /api/export/csv`, `GET /api/export/json`,
   `GET /api/export/zip`.
 - Configure tokens with `MEDIA_ARK_PRO_TOKENS`.
-- Send the pro token with `Authorization: Bearer <token>`, `X-Api-Key:
-  <token>`, or `?token=<token>`.
+- Send the user API key as `Authorization: Bearer <api_key>` and the pro
+  token as `X-Api-Key: <token>` or `?token=<token>`. (The Bearer slot
+  carries the user key, not the pro token.)
 - Export tokens are independent from local user API keys.
 - If an archive manifest includes `owner`, the token principal must match that
   owner.
@@ -176,9 +180,9 @@ MEDIA_ARK_ALLOWED_ROOTS="/srv/media-ark:/srv/media-ark-exports" \
 | `GET` | `/api/manifest` | User bearer | Return the parsed `manifest.json` payload for an output root. |
 | `GET` | `/api/index` | User bearer | Return filtered records from `index.jsonl`. |
 | `POST` | `/api/run` | User bearer | Run processing, source checks, verification, repair, or query actions. |
-| `GET` | `/api/export/csv` | Pro token | Download the archive index as CSV. |
-| `GET` | `/api/export/json` | Pro token | Download manifest, index rows, summary, and counts as JSON. |
-| `GET` | `/api/export/zip` | Pro token | Download `manifest.json` and OCR sidecars as a zip file. |
+| `GET` | `/api/export/csv` | User bearer + Pro token | Download the archive index as CSV. |
+| `GET` | `/api/export/json` | User bearer + Pro token | Download manifest, index rows, summary, and counts as JSON. |
+| `GET` | `/api/export/zip` | User bearer + Pro token | Download `manifest.json` and OCR sidecars as a zip file. |
 
 ## Auth Endpoints
 
@@ -487,15 +491,21 @@ Ownership is enforced when the archive manifest includes an `owner` field:
 }
 ```
 
-An archive without `owner` is exportable by any configured pro principal.
+An archive without `owner` is exportable by any configured pro principal
+within the authenticated user's sandbox. The `out` path must stay inside
+that sandbox; requests for paths outside it are rejected.
+
+Export requests carry both credentials: the user API key as the bearer
+token and the pro token as a `token` query parameter (or `X-Api-Key`
+header).
 
 ### `GET /api/export/csv`
 
 Downloads `index.jsonl` flattened to CSV.
 
 ```bash
-curl -OJ "http://127.0.0.1:8787/api/export/csv?out=/srv/media-ark/acme/out" \
-  -H "Authorization: Bearer $MEDIA_ARK_PRO_TOKEN"
+curl -OJ "http://127.0.0.1:8787/api/export/csv?out=/srv/media-ark/acme/out&token=$MEDIA_ARK_PRO_TOKEN" \
+  -H "Authorization: Bearer $MEDIA_ARK_API_KEY"
 ```
 
 Response headers:
@@ -511,8 +521,8 @@ Downloads one JSON document containing `manifest`, `index`, `index_summary`,
 and `counts`.
 
 ```bash
-curl -OJ "http://127.0.0.1:8787/api/export/json?out=/srv/media-ark/acme/out" \
-  -H "Authorization: Bearer $MEDIA_ARK_PRO_TOKEN"
+curl -OJ "http://127.0.0.1:8787/api/export/json?out=/srv/media-ark/acme/out&token=$MEDIA_ARK_PRO_TOKEN" \
+  -H "Authorization: Bearer $MEDIA_ARK_API_KEY"
 ```
 
 Response headers:
@@ -528,8 +538,8 @@ Downloads `manifest.json` plus per-capture OCR sidecar JSON files under
 `sidecars/`.
 
 ```bash
-curl -OJ "http://127.0.0.1:8787/api/export/zip?out=/srv/media-ark/acme/out" \
-  -H "Authorization: Bearer $MEDIA_ARK_PRO_TOKEN"
+curl -OJ "http://127.0.0.1:8787/api/export/zip?out=/srv/media-ark/acme/out&token=$MEDIA_ARK_PRO_TOKEN" \
+  -H "Authorization: Bearer $MEDIA_ARK_API_KEY"
 ```
 
 Response headers:

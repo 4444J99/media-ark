@@ -158,9 +158,7 @@ def _is_api_path(path: str) -> bool:
 
 def _is_public_api_request(method: str, path: str) -> bool:
     route = _normalized_route(path)
-    if (method.upper(), route) in PUBLIC_API_ROUTES:
-        return True
-    return method.upper() == "GET" and route.startswith("/api/export/")
+    return (method.upper(), route) in PUBLIC_API_ROUTES
 
 
 def _normalized_route(path: str) -> str:
