@@ -34,6 +34,10 @@ def _api_env(root: Path) -> dict[str, str]:
     env = os.environ.copy()
     env["MEDIA_ARK_USERS_DB"] = str(root / "users.db")
     env["MEDIA_ARK_USER_SANDBOX_ROOT"] = str(root / "sandboxes")
+    # Isolate the quota ledger too: /api/run now consumes quota, so without
+    # this the API tests would accumulate against the repo's real
+    # .media-ark/quota.json and eventually 429 (flaky across many runs).
+    env["MEDIA_ARK_QUOTA_DB"] = str(root / "quota.json")
     return env
 
 

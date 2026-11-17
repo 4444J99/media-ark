@@ -64,8 +64,15 @@ def free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def read_json_url(url: str, *, timeout: int = 2) -> Dict[str, Any]:
-    with urllib.request.urlopen(url, timeout=timeout) as response:
+def _auth_headers(token: str | None) -> Dict[str, str]:
+    return {"Authorization": f"Bearer {token}"} if token else {}
+
+
+def read_json_url(
+    url: str, *, timeout: int = 2, token: str | None = None
+) -> Dict[str, Any]:
+    request = urllib.request.Request(url, headers=_auth_headers(token))
+    with urllib.request.urlopen(request, timeout=timeout) as response:
         payload = json.loads(response.read().decode("utf-8"))
     if not isinstance(payload, dict):
         raise AssertionError(f"expected object response from {url}")
@@ -73,13 +80,15 @@ def read_json_url(url: str, *, timeout: int = 2) -> Dict[str, Any]:
 
 
 def post_json(
-    url: str, payload: Dict[str, Any], *, timeout: int = 10
+    url: str, payload: Dict[str, Any], *, timeout: int = 10, token: str | None = None
 ) -> Dict[str, Any]:
+    headers = {"Content-Type": "application/json"}
+    headers.update(_auth_headers(token))
     request = urllib.request.Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
         method="POST",
-        headers={"Content-Type": "application/json"},
+        headers=headers,
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
         result = json.loads(response.read().decode("utf-8"))
@@ -247,17 +256,16 @@ def verify_mcp(tmp_root: Path) -> Dict[str, Any]:
 
 
 def verify_platform(tmp_root: Path) -> Dict[str, Any]:
-    source = tmp_root / "platform-source"
-    out = tmp_root / "platform-out"
-    source.mkdir(parents=True)
-    out.mkdir(parents=True)
     port = free_port()
     env = os.environ.copy()
+    # Post-#43 the /api/* surface authenticates against a user store and confines
+    # each user to a sandbox. Isolate that store + sandbox tree under tmp_root so
+    # the verifier neither reads nor writes the developer's real data.
     env.update(
         {
-            env_key("SOURCE"): str(source),
-            env_key("OUT"): str(out),
             env_key("PORT"): str(port),
+            env_key("USERS_DB"): str(tmp_root / "users.db"),
+            env_key("USER_SANDBOX_ROOT"): str(tmp_root / "sandboxes"),
         }
     )
     proc = subprocess.Popen(
@@ -270,21 +278,38 @@ def verify_platform(tmp_root: Path) -> Dict[str, Any]:
         start_new_session=True,
     )
     try:
-        status = None
+        # Readiness: the static root is public; every /api/* route now requires a
+        # bearer token, so probing /api/status unauthenticated would loop on 401.
+        ready = False
         deadline = time.time() + 30
         while time.time() < deadline:
             try:
-                status = read_json_url(f"http://127.0.0.1:{port}/api/status")
+                read_text_url(f"http://127.0.0.1:{port}/")
+                ready = True
                 break
             except Exception:
                 if proc.poll() is not None:
                     break
                 time.sleep(0.25)
-        if status is None:
+        if not ready:
             stdout, stderr = proc.communicate(timeout=5)
             raise AssertionError(
                 f"platform did not start\nstdout={stdout}\nstderr={stderr}"
             )
+
+        # Register a user and drive every authenticated call as that principal,
+        # operating strictly inside the sandbox it is granted.
+        auth = post_json(
+            f"http://127.0.0.1:{port}/api/auth/register",
+            {"username": "verifier", "password": "correct horse battery"},
+        )
+        token = auth["api_key"]
+        source = Path(auth["source"])
+        out = Path(auth["out"])
+
+        status = read_json_url(
+            f"http://127.0.0.1:{port}/api/status", token=token
+        )
         if status.get("ok") is not True:
             raise AssertionError("platform status was not ok")
 
@@ -295,6 +320,7 @@ def verify_platform(tmp_root: Path) -> Dict[str, Any]:
         run_payload = post_json(
             f"http://127.0.0.1:{port}/api/run",
             {"action": "check-source", "source": str(source), "out": str(out)},
+            token=token,
         )
         if run_payload.get("ok") is not True:
             raise AssertionError("API check-source did not succeed")
@@ -304,15 +330,20 @@ def verify_platform(tmp_root: Path) -> Dict[str, Any]:
         ):
             raise AssertionError("API run did not persist telemetry")
 
-        status_after = read_json_url(f"http://127.0.0.1:{port}/api/status?out={out}")
+        status_after = read_json_url(
+            f"http://127.0.0.1:{port}/api/status?out={out}", token=token
+        )
         if (
             status_after.get("platform_events_exists") is not True
             or status_after.get("report_count", 0) < 1
         ):
             raise AssertionError("API status did not expose telemetry evidence")
 
+        # An authenticated request for a path outside the user's sandbox is a 400.
         try:
-            read_json_url(f"http://127.0.0.1:{port}/api/status?out=/etc")
+            read_json_url(
+                f"http://127.0.0.1:{port}/api/status?out=/etc", token=token
+            )
             raise AssertionError("API accepted outside-root path")
         except urllib.error.HTTPError as exc:
             if exc.code != 400:
