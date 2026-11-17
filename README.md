@@ -21,7 +21,6 @@
 - [Problem](#problem)
 - [Pro Tier](#pro-tier)
 - [Architecture](#architecture)
-- [Install](#install)
 - [Quick Start](#quick-start)
 - [Storage Model](#storage-model)
 - [Commands](#commands)
@@ -66,63 +65,6 @@ flowchart TD
   E --> F[Append sidecar + index]
   F --> G[State and reports]
   G --> H[Query + verify + repair]
-```
-
-## Install
-
-Media Ark is local-first and dependency-light: the core engine is **pure Python standard library** (no third-party packages to install), and the npm scripts are thin convenience wrappers around the Python CLI and shell tools.
-
-### Requirements
-
-- **Python 3.11+** — required (core engine).
-- **Node.js 18+** — optional; only needed for the `npm run …` shortcuts and the one-command platform launcher.
-- **Optional enrichment tools** — used when present and silently skipped when absent (the pipeline still runs without them):
-  - [`tesseract`](https://github.com/tesseract-ocr/tesseract) — OCR text extraction from images.
-  - [`poppler`](https://poppler.freedesktop.org/) (`pdftotext`) — text extraction from PDFs.
-  - [`ffmpeg`](https://ffmpeg.org/) / `ffprobe` — video metadata and optional poster frames.
-
-```bash
-# macOS (Homebrew)
-brew install tesseract poppler ffmpeg
-
-# Debian/Ubuntu
-sudo apt-get install tesseract-ocr poppler-utils ffmpeg
-```
-
-### Get the code
-
-```bash
-git clone https://github.com/4444J99/media-ark.git
-cd media-ark
-```
-
-That is enough to run everything in [Quick Start](#quick-start) directly with `python3`.
-
-### Optional: install as a package
-
-Installing the project exposes the console entry points (`media-ark`, `media-ark-api`, `media-ark-mcp`) on your `PATH`:
-
-```bash
-pip install -e .
-```
-
-```bash
-media-ark data/captures/raw --out .media-ark --dry-run
-```
-
-### Optional: enable the npm shortcuts
-
-```bash
-# no dependencies are downloaded; this just makes `npm run …` available
-npm install
-npm run media-ark:dry-run
-```
-
-### Verify the install
-
-```bash
-npm run release:verify        # or: python3 tools/media-ark/verify_release.py
-npm test                      # or: python3 -m unittest discover -s tests -p 'test_*.py'
 ```
 
 ## Quick Start

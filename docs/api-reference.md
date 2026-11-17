@@ -83,6 +83,28 @@ curl -s http://127.0.0.1:8787/api/run \
   -d '{"action":"process","copy":true,"max_files":100}'
 ```
 
+### Observability
+
+Every API or MCP action persists telemetry by default under the selected `out` root.
+
+- Event log: `<out>/platform-events.jsonl`
+- Per-action report: `<out>/reports/platform-<mode>-<run_id>.json`
+- `GET /api/status` reports `platform_events_exists`, `reports_exists`, `report_count`, and `latest_report`.
+- `POST /api/run` and MCP action results include `event_log` and `report` paths.
+
+The event/report paths can be overridden with `event_log`/`eventLog` and `report`/`reportPath`, but overrides must still pass the allowed-root boundary.
+
+### GET endpoints
+
+- `GET /api/status?source=<source>&out=<out>`
+  - returns source/out status, manifest/index existence, and row count.
+- `GET /api/manifest?out=<out>`
+  - returns parsed manifest payload if present.
+- `GET /api/index?source=<source>&out=<out>&limit=<n>&status=<all|processed|duplicate>&media=<all|image|video|document>`
+  - returns filtered recent index records.
+
+### POST endpoint
+
 ## Authentication
 
 Media Ark has two authentication surfaces.

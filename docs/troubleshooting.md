@@ -10,7 +10,7 @@
 ## Watch mode exits immediately
 
 - Check if `--max-runs` is set to `0` for indefinite mode.
-- Confirm no stale lock: remove `.capture-automation/manifest.lock` only if safe.
+- Confirm no stale lock: remove `.media-ark/manifest.lock` only if safe.
 
 ## OCR isn't available
 
@@ -18,4 +18,4 @@
 
 ## Wrapper path errors
 
-- Confirm scripts are executable (`chmod +x tools/capture-automation/*.sh`).
+- Confirm scripts are executable (`chmod +x tools/media-ark/*.sh`).

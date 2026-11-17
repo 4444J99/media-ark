@@ -6,7 +6,7 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, List, Optional
+from typing import Any, Iterable, List, Mapping, Optional
 
 # Ensure the `media_ark` brand module is importable when this file is
 # imported as `src.platform.config` (the brand module lives at the top
@@ -20,76 +20,6 @@ from media_ark import BRAND_DATA_DIR, BRAND_PYTHON_PKG, env_key  # noqa: E402
 
 class PlatformValidationError(ValueError):
     """Raised when API/MCP input would cross the configured runtime boundary."""
-
-
-_TRUTHY = {"1", "true", "yes", "on", "enabled"}
-
-
-def env_truthy(suffix: str, *, default: bool = False) -> bool:
-    """Return True when the ``MEDIA_ARK_<suffix>`` env var is set to a truthy value."""
-    raw = os.environ.get(env_key(suffix))
-    if raw is None:
-        return default
-    return raw.strip().lower() in _TRUTHY
-
-
-def pro_enabled() -> bool:
-    """Return True when the 'pro' feature tier is enabled via ``MEDIA_ARK_PRO``.
-
-    Pro-only scaffolding (e.g. encrypted cloud sync in ``platform.sync``)
-    must check this before doing any work. It is opt-in and defaults to off
-    so the local-first pipeline never reaches the network unless asked.
-    """
-    return env_truthy("PRO")
-
-
-@dataclass
-class SyncConfig:
-    """Connection settings for the encrypted cloud-sync backend (S3 / R2).
-
-    All fields are read from ``MEDIA_ARK_SYNC_*`` env vars by
-    :func:`load_sync_config`. Credentials are optional here so that
-    planning/encryption can be exercised (and unit-tested) without ever
-    holding real secrets or touching a bucket.
-    """
-
-    bucket: str = ""
-    endpoint_url: str = ""
-    region: str = "auto"
-    prefix: str = ""
-    access_key_id: str = ""
-    secret_access_key: str = ""
-
-    @property
-    def is_configured(self) -> bool:
-        """True when at least a destination bucket has been supplied."""
-        return bool(self.bucket)
-
-    @property
-    def has_credentials(self) -> bool:
-        return bool(self.access_key_id and self.secret_access_key)
-
-    @property
-    def provider(self) -> str:
-        """Best-effort label for the backend, derived from the endpoint."""
-        endpoint = self.endpoint_url.lower()
-        if not endpoint:
-            return "s3"
-        if "r2.cloudflarestorage.com" in endpoint or "r2." in endpoint:
-            return "r2"
-        return "s3-compatible"
-
-
-def load_sync_config() -> SyncConfig:
-    """Build a :class:`SyncConfig` from the ``MEDIA_ARK_SYNC_*`` environment."""
-    return SyncConfig(
-        bucket=os.environ.get(env_key("SYNC_BUCKET"), "").strip(),
-        endpoint_url=os.environ.get(env_key("SYNC_ENDPOINT"), "").strip(),
-        region=os.environ.get(env_key("SYNC_REGION"), "auto").strip() or "auto",
-        prefix=os.environ.get(env_key("SYNC_PREFIX"), "").strip(),
-        access_key_id=os.environ.get(env_key("SYNC_ACCESS_KEY_ID"), "").strip(),
-        secret_access_key=os.environ.get(env_key("SYNC_SECRET_ACCESS_KEY"), "").strip(),
-    )
 
 
 def repo_root() -> Path:
@@ -292,3 +222,61 @@ class ActionResult:
     error: Optional[str] = None
     event_log: str = ""
     report: str = ""
+
+
+@dataclass
+class SyncConfig:
+    """Typed configuration for the pro-tier cloud-sync backend (S3 / Cloudflare R2).
+
+    Every field defaults to empty so ``SyncConfig()`` is a valid "unconfigured"
+    value. :func:`load_sync_config` builds one from the ``MEDIA_ARK_SYNC_*``
+    environment, and :mod:`src.platform.sync` reads the derived properties
+    (``is_configured`` / ``has_credentials`` / ``provider``). No secret is ever
+    logged or surfaced -- ``sync_status`` reports state, never key material.
+    """
+
+    bucket: str = ""
+    endpoint_url: str = ""
+    prefix: str = ""
+    region: str = "auto"
+    access_key_id: str = ""
+    secret_access_key: str = ""
+
+    @property
+    def is_configured(self) -> bool:
+        """True once a destination bucket is set."""
+        return bool(self.bucket.strip())
+
+    @property
+    def has_credentials(self) -> bool:
+        """True once both halves of the access key are present."""
+        return bool(self.access_key_id.strip() and self.secret_access_key.strip())
+
+    @property
+    def provider(self) -> str:
+        """Backend label; Cloudflare R2 is detected by its endpoint host."""
+        return "r2" if "r2.cloudflarestorage" in self.endpoint_url.lower() else "s3"
+
+
+def load_sync_config(env: Optional[Mapping[str, str]] = None) -> SyncConfig:
+    """Build a :class:`SyncConfig` from the ``MEDIA_ARK_SYNC_*`` environment."""
+    source = os.environ if env is None else env
+
+    def _get(name: str) -> str:
+        return str(source.get(env_key(name), "") or "").strip()
+
+    return SyncConfig(
+        bucket=_get("SYNC_BUCKET"),
+        endpoint_url=_get("SYNC_ENDPOINT"),
+        prefix=_get("SYNC_PREFIX"),
+        region=_get("SYNC_REGION") or "auto",
+        access_key_id=_get("SYNC_ACCESS_KEY_ID"),
+        secret_access_key=_get("SYNC_SECRET_ACCESS_KEY"),
+    )
+
+
+def pro_enabled(env: Optional[Mapping[str, str]] = None) -> bool:
+    """True when the 'pro' tier is switched on via ``MEDIA_ARK_PRO``."""
+    source = os.environ if env is None else env
+    value = str(source.get(env_key("PRO"), "") or "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
